@@ -33,9 +33,28 @@ if (process.env.NODE_ENV === 'production') {
   });
 }
 
+async function autoSeed() {
+  try {
+    const User = require('./models/User');
+    const count = await User.countDocuments();
+    if (count === 0) {
+      await User.create({
+        name: 'مدير النظام',
+        email: 'admin@erp.com',
+        password: 'admin123',
+        role: 'superadmin'
+      });
+      console.log('✅ Admin created: admin@erp.com / admin123');
+    }
+  } catch(e) {
+    console.log('Seed error:', e.message);
+  }
+}
+
 mongoose.connect(process.env.MONGO_URI)
-  .then(() => {
+  .then(async () => {
     console.log('✅ MongoDB connected');
+    await autoSeed();
     const PORT = process.env.PORT || 5000;
     app.listen(PORT, () => console.log('🚀 Server on port ' + PORT));
   })
