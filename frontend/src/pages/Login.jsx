@@ -25,14 +25,11 @@ export default function Login() {
   return (
     <div style={{ minHeight: '100vh', background: '#0f172a', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
       <div style={{ width: '100%', maxWidth: 400 }}>
-        {/* Logo */}
         <div style={{ textAlign: 'center', marginBottom: 32 }}>
-          <div style={{ width: 64, height: 64, borderRadius: 16, background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 32, marginBottom: 12 }}>🛍️</div>
-          <div style={{ fontWeight: 800, fontSize: 22, color: '#fff' }}>Amazon ERP</div>
-          <div style={{ color: '#64748b', fontSize: 13, marginTop: 4 }}>نظام إدارة المخزون والحسابات</div>
+          <div style={{ width: 64, height: 64, borderRadius: 16, background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 32, marginBottom: 12 }}>📈</div>
+          <div style={{ fontWeight: 800, fontSize: 22, color: '#fff' }}>SMART FOR TRADING</div>
+          <div style={{ color: '#64748b', fontSize: 13, marginTop: 4 }}>منصة التداول الذكية</div>
         </div>
-
-        {/* Card */}
         <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 16, padding: 32 }}>
           <form onSubmit={submit}>
             <div style={{ marginBottom: 16 }}>
