@@ -55,8 +55,35 @@ router.post('/issue/amazon', auth, permit('amazon', 'stock'), async (req, res) =
   } catch (e) { res.status(500).json({ message: e.message }); }
 });
 
+// طلب أمازون مش موجود في التقرير: يتسجل من الأصناف الممسوحة ويطلع فاتورة
+router.post('/issue/amazon-new', auth, permit('amazon', 'stock'), async (req, res) => {
+  try {
+    const orderId = String(req.body.orderId || '').trim();
+    const { scanned = {}, prices = {} } = req.body;     // { productId: qty }, { productId: unitPrice }
+    if (!orderId) return res.status(400).json({ message: 'رقم الطلب مطلوب' });
+    if (await AmazonOrder.exists({ orderId })) return res.status(400).json({ message: 'الطلب موجود بالفعل — امسحه تاني من الأول' });
+    const ids = Object.keys(scanned).filter(id => +scanned[id] > 0);
+    if (!ids.length) return res.status(400).json({ message: 'امسح الأصناف الأول' });
+    const prods = await Product.find({ _id: { $in: ids } }).lean();
+    const lines = [];
+    for (const p of prods) {
+      const qty = +scanned[p._id];
+      const unit = prices[p._id] !== undefined && prices[p._id] !== '' ? +prices[p._id] : (p.sellPrice || 0);
+      lines.push(await AmazonOrder.create({
+        orderId, sku: p.sku || p.barcode || String(p._id), productName: p.name, qty,
+        itemPrice: Math.round(unit * qty * 100) / 100, purchaseDate: new Date(),
+        amazonStatus: 'يدوي', stage: 'shipped', product: p._id, manual: true
+      }));
+    }
+    const { resolve } = await buildResolver();
+    const r = await postOrderGroup(orderId, lines, resolve, req.user._id);
+    if (r.reason) { await AmazonOrder.deleteMany({ _id: { $in: lines.map(l => l._id) } }); return res.status(400).json({ message: r.reason }); }
+    res.json({ message: `✅ خرج الطلب — فاتورة ${r.sale.invoiceNo}`, invoiceNo: r.sale.invoiceNo });
+  } catch (e) { res.status(500).json({ message: e.message }); }
+});
+
 // صرف يدوي (بيع مباشر / تالف / عينة ...) — يخصم المخزون ويسجل الحركة
-router.post('/issue/manual', auth, permit('stock'), async (req, res) => {
+router.post('/issue/manual', auth, permit('stock', 'amazon'), async (req, res) => {
   try {
     const { items = [], reason = 'صرف بالاسكانر' } = req.body;   // [{ product, qty }]
     if (!items.length) return res.status(400).json({ message: 'مفيش أصناف' });

@@ -6,6 +6,7 @@ import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
 import CameraScanner from '../components/CameraScanner';
 
+const DISPATCH = 'خروج لأمازون';
 const REASONS = ['بيع مباشر', 'تالف', 'عينة / هدية', 'تحويل لمخزن تاني', 'أخرى'];
 
 const bigInput = (color) => ({
@@ -16,7 +17,7 @@ const bigInput = (color) => ({
 export default function ScanOut() {
   const { can } = useAuth();
   const canAmazon = can('amazon'), canManual = can('stock');
-  const [mode, setMode] = useState(canAmazon ? 'amazon' : 'manual');
+  const [mode, setMode] = useState(canAmazon ? 'dispatch' : 'manual');
   const [flash, setFlash] = useState(null); // { ok, text }
 
   const say = (ok, text) => { beep(ok); setFlash({ ok, text }); if (!ok) toast.error(text); };
@@ -25,7 +26,8 @@ export default function ScanOut() {
     <div style={{ maxWidth: 900 }}>
       <PageHeader title="خروج بضاعة بالاسكانر" icon="📤" />
       <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
-        {canAmazon && <ModeBtn on={mode === 'amazon'} onClick={() => { setMode('amazon'); setFlash(null); }}>🛒 طلب أمازون</ModeBtn>}
+        {canAmazon && <ModeBtn on={mode === 'dispatch'} onClick={() => { setMode('dispatch'); setFlash(null); }}>🚚 خروج لأمازون</ModeBtn>}
+        {canAmazon && <ModeBtn on={mode === 'amazon'} onClick={() => { setMode('amazon'); setFlash(null); }}>🛒 بطلب محدد</ModeBtn>}
         {canManual && <ModeBtn on={mode === 'manual'} onClick={() => { setMode('manual'); setFlash(null); }}>📦 صرف يدوي</ModeBtn>}
       </div>
       {flash && (
@@ -33,7 +35,9 @@ export default function ScanOut() {
           {flash.text}
         </div>
       )}
-      {mode === 'amazon' ? <AmazonMode say={say} flash={flash} /> : <ManualMode say={say} flash={flash} />}
+      {mode === 'amazon' && <AmazonMode say={say} flash={flash} />}
+      {mode === 'dispatch' && <ManualMode key="d" say={say} flash={flash} fixedReason={DISPATCH} />}
+      {mode === 'manual' && <ManualMode key="m" say={say} flash={flash} />}
     </div>
   );
 }
@@ -58,7 +62,10 @@ function AmazonMode({ say, flash }) {
   const [busy, setBusy] = useState(false);
   const ref = useRef();
   const [cam, setCam] = useState(false);
+  const [notFound, setNotFound] = useState('');   // رقم طلب مش موجود في النظام
+  const [prices, setPrices] = useState({});       // productId → سعر البيع (للطلب اليدوي)
   useEffect(() => { ref.current?.focus(); }, [order]);
+  const manual = !!order?.manual;
 
   // المطلوب لكل منتج
   const need = {};
@@ -67,7 +74,9 @@ function AmazonMode({ say, flash }) {
     if (l.product) { need[l.product._id] = (need[l.product._id] || 0) + l.qty; names[l.product._id] = l.product.name; }
   });
   const unmapped = (order?.lines || []).filter(l => !l.product && l.stage !== 'cancelled');
+  if (manual) Object.keys(scanned).forEach(id => { need[id] = scanned[id]; names[id] = order.names[id]; });
   const complete = order && !unmapped.length && Object.keys(need).length > 0 &&
+    Object.values(scanned).some(q => q > 0) &&
     Object.keys({ ...need, ...scanned }).every(id => (need[id] || 0) === (scanned[id] || 0));
 
   const onEnter = async (raw) => {
@@ -78,14 +87,33 @@ function AmazonMode({ say, flash }) {
       try {
         const r = await api.get(`/scan/order/${encodeURIComponent(v)}`);
         if (r.data.posted) { say(false, '⚠️ الطلب ده خرج قبل كده'); return; }
-        setOrder(r.data); setScanned({});
+        setOrder(r.data); setScanned({}); setNotFound('');
         say(true, `طلب ${v} — امسح الأصناف`);
-      } catch (e) { say(false, e.response?.data?.message || 'خطأ'); }
+      } catch (e) {
+        if (e.response?.status !== 404) { say(false, e.response?.data?.message || 'خطأ'); return; }
+        // يمكن ده باركود صنف مش رقم طلب
+        try {
+          const p = await lookup(v);
+          say(false, `ده باركود صنف «${p.name}» — امسح أو اكتب رقم طلب أمازون الأول`);
+        } catch {
+          setNotFound(v); setCam(false);
+          say(false, `الطلب ${v} مش موجود في النظام`);
+        }
+      }
       return;
     }
     try {
       const p = await lookup(v);
       const id = p._id;
+      if (manual) {   // طلب يدوي: أي صنف يتضاف
+        const cur = scannedRef.current;
+        const n = { ...cur, [id]: (cur[id] || 0) + 1 };
+        order.names[id] = p.name;
+        setPrices(pr => ({ ...pr, [id]: pr[id] ?? p.sellPrice ?? 0 }));
+        setScanned(n);
+        say(true, `✓ ${p.name} (${n[id]})`);
+        return;
+      }
       if (!need[id]) { say(false, `❌ ${p.name} مش في الطلب ده`); return; }
       const cur = scannedRef.current;
       if ((cur[id] || 0) >= need[id]) { say(false, `❌ ${p.name} — مسحت الكمية كاملة (${need[id]}) خلاص`); return; }
@@ -100,11 +128,19 @@ function AmazonMode({ say, flash }) {
   const confirmOut = async () => {
     setBusy(true);
     try {
-      const r = await api.post('/scan/issue/amazon', { orderId: order.orderId, scanned });
+      const r = manual
+        ? await api.post('/scan/issue/amazon-new', { orderId: order.orderId, scanned, prices })
+        : await api.post('/scan/issue/amazon', { orderId: order.orderId, scanned });
       say(true, r.data.message);
-      setOrder(null); setScanned({});
+      setOrder(null); setScanned({}); setPrices({});
     } catch (e) { say(false, e.response?.data?.message || 'خطأ'); }
     setBusy(false);
+  };
+
+  const startManual = () => {
+    setOrder({ orderId: notFound, manual: true, lines: [], names: {} });
+    setScanned({}); setPrices({}); setNotFound('');
+    say(true, `طلب يدوي ${notFound} — امسح القطع اللي خارجة`);
   };
 
   return (
@@ -119,9 +155,23 @@ function AmazonMode({ say, flash }) {
       </div>
       <CameraScanner open={cam} onClose={() => setCam(false)} onScan={onEnter} message={flash} continuous title={order ? 'امسح القطع' : 'امسح رقم الطلب'} />
 
+      {notFound && !order && (
+        <div style={{ marginTop: 14, padding: 14, borderRadius: 10, border: '1px solid #f59e0b66', background: '#f59e0b11' }}>
+          <div style={{ fontWeight: 700, marginBottom: 6 }}>الطلب <span style={{ fontFamily: 'monospace' }}>{notFound}</span> مش في النظام</div>
+          <div style={{ fontSize: 12, color: C.sub, marginBottom: 10 }}>
+            {/^\d{3}-\d{7}-\d{7}$/.test(notFound) ? 'غالباً لسه ما رفعتش تقرير طلبات فيه الطلب ده.' : '⚠️ الرقم ده مش شبه رقم طلب أمازون (الشكل: 402-1234567-1234567) — اتأكد إنك مسحت الرقم الصح.'}
+            {' '}تقدر تسجّله يدوي دلوقتي، ولما ترفع التقرير بعدين هيتربط بنفس الفاتورة من غير تكرار.
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <Btn onClick={startManual}>➕ سجّله يدوي وامسح القطع</Btn>
+            <Btn variant="ghost" onClick={() => setNotFound('')}>إلغاء</Btn>
+          </div>
+        </div>
+      )}
+
       {order && <>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '16px 0 10px' }}>
-          <span style={{ fontWeight: 800, fontFamily: 'monospace' }}>{order.orderId}</span>
+          <span style={{ fontWeight: 800, fontFamily: 'monospace' }}>{order.orderId} {manual && <Badge color="#f59e0b">يدوي</Badge>}</span>
           <Btn size="sm" variant="ghost" onClick={() => { setOrder(null); setScanned({}); }}>✖ طلب تاني</Btn>
         </div>
         {unmapped.length > 0 && <div style={{ color: '#f87171', fontSize: 13, marginBottom: 10 }}>⚠️ SKU غير مربوط بمنتج: {unmapped.map(u => u.sku).join('، ')} — اربطه من مركز أمازون ← ربط SKU</div>}
@@ -132,11 +182,16 @@ function AmazonMode({ say, flash }) {
             <div key={id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', borderRadius: 8, marginBottom: 6, background: done ? '#10b98118' : '#0f172a', border: `1px solid ${done ? '#10b98155' : C.border}` }}>
               <span style={{ fontSize: 20 }}>{done ? '✅' : '⬜'}</span>
               <span style={{ flex: 1, fontWeight: 600 }}>{names[id]}</span>
-              <span style={{ fontSize: 22, fontWeight: 800, color: done ? '#34d399' : '#fbbf24' }}>{s} / {q}</span>
-              {s > 0 && <Btn size="sm" variant="ghost" onClick={() => setScanned({ ...scanned, [id]: s - 1 })}>−1</Btn>}
+              {manual
+                ? <><input type="number" value={prices[id] ?? ''} onChange={e => setPrices({ ...prices, [id]: e.target.value })} title="سعر القطعة" style={{ width: 90, textAlign: 'center', background: '#1e293b', border: `1px solid ${C.border}`, borderRadius: 6, padding: 6, color: '#fff' }} />
+                    <span style={{ fontSize: 22, fontWeight: 800, color: '#34d399' }}>×{s}</span></>
+                : <span style={{ fontSize: 22, fontWeight: 800, color: done ? '#34d399' : '#fbbf24' }}>{s} / {q}</span>}
+              {s > 0 && <Btn size="sm" variant="ghost" onClick={() => { const n = { ...scanned, [id]: s - 1 }; if (manual && !n[id]) delete n[id]; setScanned(n); }}>−1</Btn>}
             </div>
           );
         })}
+        {manual && Object.keys(scanned).length === 0 && <div style={{ color: C.muted, fontSize: 13, padding: 10 }}>امسح أول قطعة…</div>}
+        {manual && Object.keys(scanned).length > 0 && <div style={{ fontSize: 11, color: C.muted, marginBottom: 4 }}>الرقم في المربع = سعر بيع القطعة على أمازون (عدّله لو مختلف)</div>}
         <Btn size="lg" variant="success" style={{ width: '100%', marginTop: 12 }} disabled={!complete || busy} onClick={confirmOut}>
           {busy ? '⏳...' : complete ? '📤 تأكيد خروج الطلب (فاتورة + خصم مخزون)' : 'لسه الأصناف مش مكتملة'}
         </Btn>
@@ -146,10 +201,10 @@ function AmazonMode({ say, flash }) {
 }
 
 // ═══ صرف يدوي: امسح الأصناف ← اختار السبب ← تأكيد ═══════════════
-function ManualMode({ say, flash }) {
+function ManualMode({ say, flash, fixedReason }) {
   const [items, setItems] = useState([]); // { product, qty }
   const [code, setCode] = useState('');
-  const [reason, setReason] = useState(REASONS[0]);
+  const [reason, setReason] = useState(fixedReason || REASONS[0]);
   const [busy, setBusy] = useState(false);
   const ref = useRef();
   const [cam, setCam] = useState(false);
@@ -188,7 +243,9 @@ function ManualMode({ say, flash }) {
 
   return (
     <Card>
-      <div style={{ fontSize: 13, color: C.sub, marginBottom: 8 }}>امسح باركود القطع — كل مسحة = قطعة</div>
+      <div style={{ fontSize: 13, color: C.sub, marginBottom: 8 }}>
+        {fixedReason ? 'امسح كل قطعة خارجة لأمازون (كل مسحة = قطعة) — بعدين ارفع تقرير الطلبات وقارن من مركز أمازون ← مطابقة الخروج' : 'امسح باركود القطع — كل مسحة = قطعة'}
+      </div>
       <div style={{ display: 'flex', gap: 8 }}>
         <input ref={ref} value={code} onChange={e => setCode(e.target.value)} onKeyDown={e => e.key === 'Enter' && onEnter()} placeholder="امسح باركود المنتج" style={bigInput('#6366f1')} />
         <CamBtn onClick={() => setCam(true)} />
@@ -211,13 +268,14 @@ function ManualMode({ say, flash }) {
 
       {items.length > 0 && (
         <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 12, flexWrap: 'wrap' }}>
+          {fixedReason ? <Badge color="#f59e0b">🚚 {fixedReason}</Badge> : (
           <select value={reason} onChange={e => setReason(e.target.value)} style={{ background: '#0f172a', border: `1px solid ${C.border}`, borderRadius: 8, padding: '10px 12px', color: C.text, fontSize: 14 }}>
             {REASONS.map(r => <option key={r}>{r}</option>)}
-          </select>
+          </select>)}
           <Badge color="#6366f1">{items.length} صنف — {total} قطعة</Badge>
           <div style={{ flex: 1 }} />
           <Btn variant="ghost" onClick={() => setItems([])}>مسح القائمة</Btn>
-          <Btn size="lg" variant="success" disabled={busy || over.length > 0} onClick={confirmOut}>{busy ? '⏳...' : over.length ? 'كمية أكبر من المخزون' : '📤 تأكيد الصرف'}</Btn>
+          <Btn size="lg" variant="success" disabled={busy || over.length > 0} onClick={confirmOut}>{busy ? '⏳...' : over.length ? 'كمية أكبر من المخزون' : (fixedReason ? '🚚 تأكيد الخروج' : '📤 تأكيد الصرف')}</Btn>
         </div>
       )}
     </Card>

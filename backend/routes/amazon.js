@@ -105,15 +105,16 @@ function kindFromType(type) {
 async function buildResolver() {
   const [maps, products] = await Promise.all([
     AmazonSkuMap.find().lean(),
-    Product.find().select('name sku asin buyPrice sellPrice stock minStock active').lean()
+    Product.find().select('name sku asin barcode buyPrice sellPrice stock minStock active').lean()
   ]);
   const byId = new Map(products.map(p => [String(p._id), p]));
   const bySku = new Map(products.filter(p => p.sku).map(p => [p.sku.trim().toLowerCase(), p]));
   const byAsin = new Map(products.filter(p => p.asin).map(p => [p.asin.trim().toUpperCase(), p]));
   const byMap = new Map(maps.map(m => [m.sku.trim().toLowerCase(), byId.get(String(m.product))]));
+  const byBarcode = new Map(products.filter(p => p.barcode).map(p => [p.barcode.trim().toLowerCase(), p]));
   const resolve = (sku, asin) => {
     const k = String(sku || '').trim().toLowerCase();
-    return byMap.get(k) || bySku.get(k) || (asin ? byAsin.get(String(asin).trim().toUpperCase()) : null) || null;
+    return byMap.get(k) || bySku.get(k) || byBarcode.get(k) || (asin ? byAsin.get(String(asin).trim().toUpperCase()) : null) || null;
   };
   return { resolve, products };
 }
@@ -135,7 +136,10 @@ async function nextInvoiceNo() {
 const r2 = (n) => Math.round((n || 0) * 100) / 100;
 
 // يحوّل سطور طلب واحد لفاتورة بيع ويخصم المخزون — مستخدمة في الترحيل وفي شاشة الاسكانر
-async function postOrderGroup(orderId, items, resolve, userId) {
+const DISPATCH_REASON = 'خروج لأمازون';
+
+// deductStock = false لما البضاعة اتخصمت قبل كده بالاسكانر (خروج لأمازون)
+async function postOrderGroup(orderId, items, resolve, userId, { deductStock = true } = {}) {
   const prods = items.map(i => resolve(i.sku, i.asin));
   const missing = items.filter((_, k) => !prods[k]).map(i => i.sku);
   if (missing.length) return { reason: 'SKU غير مربوط: ' + missing.join(', ') };
@@ -157,13 +161,15 @@ async function postOrderGroup(orderId, items, resolve, userId) {
     notes: 'مرحّل تلقائياً من مركز أمازون', createdBy: userId
   });
   for (let k = 0; k < items.length; k++) {
-    const prod = await Product.findById(prods[k]._id);
-    const before = prod.stock;
-    prod.stock -= items[k].qty;
-    await prod.save();
-    await StockMovement.create({ product: prod._id, type: 'out', qty: items[k].qty, before, after: prod.stock, reason: 'طلب أمازون ' + orderId, reference: invoiceNo, createdBy: userId });
+    if (deductStock) {
+      const prod = await Product.findById(prods[k]._id);
+      const before = prod.stock;
+      prod.stock -= items[k].qty;
+      await prod.save();
+      await StockMovement.create({ product: prod._id, type: 'out', qty: items[k].qty, before, after: prod.stock, reason: 'طلب أمازون ' + orderId, reference: invoiceNo, createdBy: userId });
+    }
     items[k].sale = sale._id;
-    items[k].product = prod._id;
+    items[k].product = prods[k]._id;
     await items[k].save();
   }
   return { sale };
@@ -180,6 +186,13 @@ router.post('/upload/orders', auth, permit('amazon'), async (req, res) => {
     const { headerRow, idx } = found;
     const get = (r, f) => idx[f] !== undefined ? r[idx[f]] : '';
     const { resolve } = await buildResolver();
+
+    // طلبات اتسجلت يدوي من الاسكانر: نشيل السطور اليدوية ونربط سطور التقرير بنفس الفاتورة
+    const fileIds = [...new Set(rows.slice(headerRow + 1).map(r => String(get(r, 'orderId') || '').trim()).filter(Boolean))];
+    const manualLines = await AmazonOrder.find({ orderId: { $in: fileIds }, manual: true }).lean();
+    const manualSale = {};
+    for (const m of manualLines) if (m.sale) manualSale[m.orderId] = m.sale;
+    if (manualLines.length) await AmazonOrder.deleteMany({ _id: { $in: manualLines.map(m => m._id) } });
 
     let inserted = 0, updated = 0, skipped = 0;
     for (const r of rows.slice(headerRow + 1)) {
@@ -201,7 +214,8 @@ router.post('/upload/orders', auth, permit('amazon'), async (req, res) => {
       };
       const existing = await AmazonOrder.findOne({ orderId, sku });
       if (!existing) {
-        await AmazonOrder.create({ orderId, sku, ...data, stage: amzStage });
+        const ms = manualSale[orderId];
+        await AmazonOrder.create({ orderId, sku, ...data, stage: ms && STAGE_RANK[amzStage] < STAGE_RANK.shipped ? 'shipped' : amzStage, sale: ms || undefined });
         inserted++;
       } else {
         Object.assign(existing, data);
@@ -318,10 +332,50 @@ router.post('/orders/post-sales', auth, permit('amazon'), async (req, res) => {
     let posted = 0;
     const skipped = [];
     for (const [orderId, items] of Object.entries(groups)) {
-      const r = await postOrderGroup(orderId, items, resolve, req.user._id);
+      const r = await postOrderGroup(orderId, items, resolve, req.user._id, { deductStock: req.body.deductStock !== false });
       if (r.reason) skipped.push({ orderId, reason: r.reason }); else posted++;
     }
     res.json({ message: `تم ترحيل ${posted} طلب لفواتير بيع` + (skipped.length ? ` — ${skipped.length} متوقف` : ''), posted, skipped });
+  } catch (e) { res.status(500).json({ message: e.message }); }
+});
+
+// ═══════════════════════════════════════════════════════════════
+// مطابقة البضاعة اللي خرجت بالاسكانر مع الطلبات اللي في التقرير
+// ═══════════════════════════════════════════════════════════════
+router.get('/dispatch-compare', auth, permit('amazon', 'amazon:read', 'stock'), async (req, res) => {
+  try {
+    const from = req.query.from ? new Date(req.query.from) : new Date(Date.now() - 6 * 864e5);
+    from.setHours(0, 0, 0, 0);
+    const to = req.query.to ? new Date(req.query.to) : new Date();
+    to.setHours(23, 59, 59, 999);
+    const { resolve, products } = await buildResolver();
+    const byId = new Map(products.map(p => [String(p._id), p]));
+
+    const [moves, orders] = await Promise.all([
+      StockMovement.find({ type: 'out', reason: DISPATCH_REASON, createdAt: { $gte: from, $lte: to } }).lean(),
+      AmazonOrder.find({ purchaseDate: { $gte: from, $lte: to }, stage: { $ne: 'cancelled' } }).lean()
+    ]);
+    const rows = {};
+    const row = (id) => (rows[id] ||= { _id: id, name: byId.get(id)?.name || '؟', stock: byId.get(id)?.stock, ordered: 0, dispatched: 0, orderIds: new Set(), skus: new Set() });
+    for (const m of moves) row(String(m.product)).dispatched += m.qty;
+    const unmapped = {};
+    for (const o of orders) {
+      const p = resolve(o.sku, o.asin);
+      if (!p) { unmapped[o.sku] = (unmapped[o.sku] || 0) + o.qty; continue; }
+      const r = row(String(p._id));
+      r.ordered += o.qty; r.orderIds.add(o.orderId); r.skus.add(o.sku);
+    }
+    const list = Object.values(rows).map(r => {
+      const diff = r.dispatched - r.ordered;
+      return { ...r, orderIds: [...r.orderIds], skus: [...r.skus], diff, status: diff === 0 ? 'matched' : diff > 0 ? 'over' : 'short' };
+    }).sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff));
+    const t = (k) => list.reduce((s, r) => s + r[k], 0);
+    res.json({
+      from, to, rows: list,
+      totals: { ordered: t('ordered'), dispatched: t('dispatched'), orders: new Set(orders.map(o => o.orderId)).size,
+        matched: list.filter(r => r.status === 'matched').length, over: list.filter(r => r.status === 'over').length, short: list.filter(r => r.status === 'short').length },
+      unmapped: Object.entries(unmapped).map(([sku, qty]) => ({ sku, qty }))
+    });
   } catch (e) { res.status(500).json({ message: e.message }); }
 });
 

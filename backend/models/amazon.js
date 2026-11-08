@@ -18,7 +18,8 @@ const amazonOrderSchema = new Schema({
   city:         { type: String, default: '' },
   product:      { type: Schema.Types.ObjectId, ref: 'Product' },
   sale:         { type: Schema.Types.ObjectId, ref: 'Sale' }, // فاتورة البيع بعد الترحيل
-  notes:        { type: String, default: '' }
+  notes:        { type: String, default: '' },
+  manual:       { type: Boolean, default: false } // اتسجل من شاشة الاسكانر قبل رفع التقرير
 }, { timestamps: true });
 amazonOrderSchema.index({ orderId: 1, sku: 1 }, { unique: true });
 const AmazonOrder = mongoose.model('AmazonOrder', amazonOrderSchema);
