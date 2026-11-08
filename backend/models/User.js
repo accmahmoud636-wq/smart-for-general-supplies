@@ -8,15 +8,15 @@ const ROLES = {
   },
   admin: {
     label: 'مدير',
-    permissions: ['products','categories','suppliers','customers','purchases','sales','expenses','stock','reports']
+    permissions: ['products','categories','suppliers','customers','purchases','sales','expenses','stock','reports','amazon']
   },
   accountant: {
     label: 'محاسب',
-    permissions: ['purchases','sales','expenses','reports','products:read','suppliers:read','customers:read']
+    permissions: ['purchases','sales','expenses','reports','products:read','suppliers:read','customers:read','amazon']
   },
   inventory: {
     label: 'مسؤول مخزون',
-    permissions: ['products','categories','suppliers','stock','purchases','reports:inventory']
+    permissions: ['products','categories','suppliers','stock','purchases','reports:inventory','amazon']
   },
   sales: {
     label: 'مبيعات',
@@ -24,7 +24,7 @@ const ROLES = {
   },
   viewer: {
     label: 'مشاهد',
-    permissions: ['products:read','sales:read','purchases:read','expenses:read','reports']
+    permissions: ['products:read','sales:read','purchases:read','expenses:read','reports','amazon:read']
   }
 };
 

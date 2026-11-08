@@ -7,6 +7,8 @@ import Dashboard from './pages/Dashboard';
 import Products from './pages/Products';
 import { Purchases, Sales } from './pages/Invoices';
 import { Categories, Suppliers, Customers, Expenses, StockPage, Users, Reports } from './pages/OtherPages';
+import AmazonHub from './pages/AmazonHub';
+import ScanOut from './pages/ScanOut';
 
 function PrivateRoute({ children }) {
   const { user, loading } = useAuth();
@@ -22,6 +24,8 @@ function AppRoutes() {
     <Routes>
       <Route path="/login"      element={user ? <Navigate to="/" /> : <Login />} />
       <Route path="/"           element={<PrivateRoute><Dashboard /></PrivateRoute>} />
+      <Route path="/scan"       element={<PrivateRoute><ScanOut /></PrivateRoute>} />
+      <Route path="/amazon"     element={<PrivateRoute><AmazonHub /></PrivateRoute>} />
       <Route path="/products"   element={<PrivateRoute><Products /></PrivateRoute>} />
       <Route path="/categories" element={<PrivateRoute><Categories /></PrivateRoute>} />
       <Route path="/suppliers"  element={<PrivateRoute><Suppliers /></PrivateRoute>} />

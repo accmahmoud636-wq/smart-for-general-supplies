@@ -35,7 +35,7 @@ export function AuthProvider({ children }) {
   const can = (perm) => {
     if (!user) return false;
     if (user.role === 'superadmin') return true;
-    const rolePerms = { admin: ['products','categories','suppliers','customers','purchases','sales','expenses','stock','reports'], accountant: ['purchases','sales','expenses','reports','products:read','suppliers:read','customers:read'], inventory: ['products','categories','suppliers','stock','purchases'], sales: ['sales','customers'], viewer: [] };
+    const rolePerms = { admin: ['products','categories','suppliers','customers','purchases','sales','expenses','stock','reports','amazon'], accountant: ['purchases','sales','expenses','reports','products:read','suppliers:read','customers:read','amazon'], inventory: ['products','categories','suppliers','stock','purchases','amazon'], sales: ['sales','customers'], viewer: ['amazon:read'] };
     const perms = rolePerms[user.role] || [];
     if (perms.includes(perm)) return true;
     const base = perm.split(':')[0];

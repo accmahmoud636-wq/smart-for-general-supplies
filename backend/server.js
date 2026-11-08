@@ -6,7 +6,7 @@ const path = require('path');
 
 const app = express();
 app.use(cors({ origin: process.env.CLIENT_URL || '*', credentials: true }));
-app.use(express.json());
+app.use(express.json({ limit: '25mb' })); // تقارير أمازون ممكن تكون كبيرة
 
 app.use('/api/auth',       require('./routes/auth'));
 app.use('/api/users',      require('./routes/users'));
@@ -24,6 +24,9 @@ const { expRouter, stockRouter, reportsRouter } = require('./routes/reports');
 app.use('/api/expenses',   expRouter);
 app.use('/api/stock',      stockRouter);
 app.use('/api/reports',    reportsRouter);
+
+app.use('/api/amazon',     require('./routes/amazon'));
+app.use('/api/scan',       require('./routes/scan'));
 
 if (process.env.NODE_ENV === 'production') {
   app.use(express.static(path.join(__dirname, '../frontend/dist')));

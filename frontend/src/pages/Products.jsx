@@ -3,6 +3,7 @@ import api from '../utils/api';
 import { Card, Btn, Badge, Input, Select, Modal, Table, PageHeader, fmt, C_THEME as C } from '../components/UI';
 import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
+import LabelModal from '../components/LabelModal';
 
 export default function Products() {
   const { can } = useAuth();
@@ -17,6 +18,7 @@ export default function Products() {
   const [loading, setLoading] = useState(true);
   const [adjustQty, setAdjustQty] = useState('');
   const [adjustReason, setAdjustReason] = useState('');
+  const [labels, setLabels] = useState(null); // { productId: copies }
 
   const load = () => {
     setLoading(true);
@@ -28,10 +30,10 @@ export default function Products() {
 
   useEffect(() => { load(); }, []);
 
-  const filtered = products.filter(p => !search || p.name?.toLowerCase().includes(search.toLowerCase()) || p.sku?.toLowerCase().includes(search.toLowerCase()) || p.asin?.toLowerCase().includes(search.toLowerCase()));
+  const filtered = products.filter(p => !search || p.name?.toLowerCase().includes(search.toLowerCase()) || p.sku?.toLowerCase().includes(search.toLowerCase()) || p.asin?.toLowerCase().includes(search.toLowerCase()) || p.barcode?.includes(search));
 
-  const openNew = () => { setEditing(null); setForm({ name:'', sku:'', asin:'', category:'', supplier:'', buyPrice:'', sellPrice:'', stock:'0', minStock:'5', unit:'قطعة', description:'' }); setModal(true); };
-  const openEdit = (p) => { setEditing(p._id); setForm({ name:p.name, sku:p.sku||'', asin:p.asin||'', category:p.category?._id||'', supplier:p.supplier?._id||'', buyPrice:p.buyPrice, sellPrice:p.sellPrice, stock:p.stock, minStock:p.minStock, unit:p.unit, description:p.description||'' }); setModal(true); };
+  const openNew = () => { setEditing(null); setForm({ name:'', sku:'', asin:'', barcode:'', category:'', supplier:'', buyPrice:'', sellPrice:'', stock:'0', minStock:'5', unit:'قطعة', description:'' }); setModal(true); };
+  const openEdit = (p) => { setEditing(p._id); setForm({ name:p.name, sku:p.sku||'', asin:p.asin||'', barcode:p.barcode||'', category:p.category?._id||'', supplier:p.supplier?._id||'', buyPrice:p.buyPrice, sellPrice:p.sellPrice, stock:p.stock, minStock:p.minStock, unit:p.unit, description:p.description||'' }); setModal(true); };
 
   const save = async () => {
     try {
@@ -40,6 +42,17 @@ export default function Products() {
       toast.success(editing ? 'تم التحديث' : 'تم الإضافة');
       setModal(false); load();
     } catch(e) { toast.error(e.response?.data?.message || 'خطأ'); }
+  };
+
+  const newBarcode = async () => {
+    try { const r = await api.get('/products/barcodes/new'); setForm(f => ({ ...f, barcode: r.data.barcode })); }
+    catch { toast.error('خطأ'); }
+  };
+
+  const generateAll = async () => {
+    if (!confirm('توليد باركود لكل المنتجات اللي ملهاش باركود؟')) return;
+    try { const r = await api.post('/products/barcodes/generate'); toast.success(r.data.message); load(); }
+    catch(e) { toast.error(e.response?.data?.message || 'خطأ'); }
   };
 
   const adjust = async () => {
@@ -51,7 +64,7 @@ export default function Products() {
   };
 
   const columns = [
-    { key: 'name', title: 'المنتج', render: (v, r) => <div><div style={{ fontWeight: 600 }}>{v}</div><div style={{ fontSize: 11, color: '#64748b' }}>{r.sku} · {r.asin}</div></div> },
+    { key: 'name', title: 'المنتج', render: (v, r) => <div><div style={{ fontWeight: 600 }}>{v}</div><div style={{ fontSize: 11, color: '#64748b' }}>{r.sku} · {r.asin}</div>{r.barcode && <div style={{ fontSize: 11, color: '#818cf8', fontFamily: 'monospace' }}>▮▯▮ {r.barcode}</div>}</div> },
     { key: 'category', title: 'الفئة', render: (v) => v ? <Badge color={v.color || '#6366f1'}>{v.name}</Badge> : '—' },
     { key: 'buyPrice', title: 'سعر الشراء', render: v => `${fmt(v)} ر.س` },
     { key: 'sellPrice', title: 'سعر البيع', render: v => `${fmt(v)} ر.س` },
@@ -60,6 +73,7 @@ export default function Products() {
     { key: '_id', title: 'إجراءات', render: (_, r) => (
       <div style={{ display: 'flex', gap: 6 }}>
         {can('products') && <Btn size="sm" variant="ghost" onClick={() => openEdit(r)}>✏️</Btn>}
+        <Btn size="sm" variant="ghost" onClick={() => setLabels({ [r._id]: 1 })}>🏷️</Btn>
         {can('stock') && <Btn size="sm" variant="warning" onClick={() => { setAdjustModal(r); setAdjustQty(''); setAdjustReason(''); }}>📦</Btn>}
       </div>
     )}
@@ -67,7 +81,11 @@ export default function Products() {
 
   return (
     <div>
-      <PageHeader title="المنتجات" icon="📦" actions={can('products') && [<Btn key="add" onClick={openNew}>+ إضافة منتج</Btn>]} />
+      <PageHeader title="المنتجات" icon="📦" actions={[
+        <Btn key="lbl" variant="ghost" onClick={() => setLabels({})}>🏷️ طباعة باركود</Btn>,
+        can('products') && <Btn key="gen" variant="ghost" onClick={generateAll}>▮▯▮ توليد باركود للكل</Btn>,
+        can('products') && <Btn key="add" onClick={openNew}>+ إضافة منتج</Btn>
+      ]} />
 
       <Card style={{ marginBottom: 16 }}>
         <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -88,6 +106,10 @@ export default function Products() {
           <div style={{ gridColumn: '1/-1' }}><Input label="اسم المنتج" value={form.name} onChange={v => setForm({...form,name:v})} required /></div>
           <Input label="SKU" value={form.sku} onChange={v => setForm({...form,sku:v})} placeholder="EL-001" />
           <Input label="Amazon ASIN" value={form.asin} onChange={v => setForm({...form,asin:v})} placeholder="B08XXXXX" />
+          <div style={{ gridColumn: '1/-1', display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+            <div style={{ flex: 1 }}><Input label="الباركود (سيبه فاضي = يتولد تلقائي، أو امسح باركود المصنع بالاسكانر)" value={form.barcode} onChange={v => setForm({...form,barcode:v})} placeholder="200000000001X" /></div>
+            <div style={{ marginBottom: 14 }}><Btn variant="ghost" onClick={newBarcode}>🎲 توليد</Btn></div>
+          </div>
           <Select label="الفئة" value={form.category} onChange={v => setForm({...form,category:v})} options={categories.map(c => ({ value: c._id, label: c.name }))} />
           <Select label="المورد" value={form.supplier} onChange={v => setForm({...form,supplier:v})} options={suppliers.map(s => ({ value: s._id, label: s.name }))} />
           <Input label="سعر الشراء (ر.س)" type="number" value={form.buyPrice} onChange={v => setForm({...form,buyPrice:v})} required />
@@ -101,6 +123,8 @@ export default function Products() {
           <Btn onClick={save}>💾 حفظ</Btn>
         </div>
       </Modal>
+
+      <LabelModal open={!!labels} onClose={() => setLabels(null)} products={products} initial={labels || {}} />
 
       {/* Adjust Stock Modal */}
       <Modal open={!!adjustModal} onClose={() => setAdjustModal(null)} title={`تسوية مخزون: ${adjustModal?.name}`} width={400}>

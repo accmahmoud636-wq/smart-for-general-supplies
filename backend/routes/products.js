@@ -70,6 +70,53 @@ custRouter.delete('/:id', auth, permit('customers'), async (req, res) => {
 // ═══════════════════════════════════════════════
 const prodRouter = require('express').Router();
 
+// ─── الباركود ────────────────────────────────────────────────
+// باركود داخلي EAN-13 يبدأ بـ 200 (نطاق مخصص للاستخدام الداخلي في المحلات)
+const eanCheck = (d12) => {
+  const sum = d12.split('').reduce((s, d, i) => s + (+d) * (i % 2 ? 3 : 1), 0);
+  return String((10 - (sum % 10)) % 10);
+};
+async function nextBarcodes(count) {
+  const last = await Product.find({ barcode: /^200\d{10}$/ }).select('barcode').lean();
+  let max = last.reduce((m, p) => Math.max(m, parseInt(p.barcode.slice(3, 12))), 0);
+  const out = [];
+  for (let i = 0; i < count; i++) {
+    const d12 = '200' + String(++max).padStart(9, '0');
+    out.push(d12 + eanCheck(d12));
+  }
+  return out;
+}
+async function barcodeTaken(code, exceptId) {
+  if (!code) return false;
+  const q = { barcode: code };
+  if (exceptId) q._id = { $ne: exceptId };
+  return !!(await Product.exists(q));
+}
+
+// بحث بالباركود (أو SKU / ASIN) — للاسكانر
+prodRouter.get('/barcode/:code', auth, async (req, res) => {
+  const code = String(req.params.code).trim();
+  const esc = code.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const exact = new RegExp('^' + esc + '$', 'i');
+  const p = await Product.findOne({ active: { $ne: false }, $or: [{ barcode: code }, { sku: exact }, { asin: exact }] }).lean();
+  if (!p) return res.status(404).json({ message: 'باركود غير مسجل: ' + code });
+  res.json(p);
+});
+
+// توليد باركود لكل المنتجات اللي ملهاش
+prodRouter.post('/barcodes/generate', auth, permit('products'), async (req, res) => {
+  try {
+    const missing = await Product.find({ $or: [{ barcode: '' }, { barcode: null }, { barcode: { $exists: false } }] }).sort('createdAt');
+    const codes = await nextBarcodes(missing.length);
+    for (let i = 0; i < missing.length; i++) { missing[i].barcode = codes[i]; await missing[i].save(); }
+    res.json({ message: `تم توليد ${missing.length} باركود`, count: missing.length });
+  } catch (e) { res.status(500).json({ message: e.message }); }
+});
+
+prodRouter.get('/barcodes/new', auth, async (req, res) => {
+  res.json({ barcode: (await nextBarcodes(1))[0] });
+});
+
 prodRouter.get('/', auth, async (req, res) => {
   const { search, category, lowStock } = req.query;
   let q = {};
@@ -93,12 +140,24 @@ prodRouter.get('/:id', auth, async (req, res) => {
 });
 
 prodRouter.post('/', auth, permit('products'), async (req, res) => {
-  try { res.status(201).json(await Product.create(req.body)); }
+  try {
+    const body = { ...req.body, barcode: String(req.body.barcode || '').trim() };
+    if (!body.barcode) body.barcode = (await nextBarcodes(1))[0];          // باركود تلقائي
+    else if (await barcodeTaken(body.barcode)) return res.status(400).json({ message: 'الباركود مستخدم لمنتج تاني' });
+    res.status(201).json(await Product.create(body));
+  }
   catch(e){ res.status(400).json({ message: e.message }); }
 });
 
 prodRouter.put('/:id', auth, permit('products'), async (req, res) => {
-  res.json(await Product.findByIdAndUpdate(req.params.id, req.body, { new: true }));
+  try {
+    const body = { ...req.body };
+    if (body.barcode !== undefined) {
+      body.barcode = String(body.barcode || '').trim();
+      if (await barcodeTaken(body.barcode, req.params.id)) return res.status(400).json({ message: 'الباركود مستخدم لمنتج تاني' });
+    }
+    res.json(await Product.findByIdAndUpdate(req.params.id, body, { new: true }));
+  } catch(e){ res.status(400).json({ message: e.message }); }
 });
 
 prodRouter.delete('/:id', auth, permit('products'), async (req, res) => {
