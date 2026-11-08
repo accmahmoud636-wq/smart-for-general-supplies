@@ -26,7 +26,7 @@ export default function Layout({ children }) {
   const { user, logout, can } = useAuth();
   const nav = useNavigate();
   const loc = useLocation();
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(() => window.innerWidth < 768); // مقفولة على الموبايل
 
   const roleColor = ROLE_COLORS[user?.role] || '#64748b';
 
@@ -79,7 +79,7 @@ export default function Layout({ children }) {
       </div>
 
       {/* Main Content */}
-      <div style={{ flex: 1, overflow: 'auto', padding: '24px', minWidth: 0 }}>
+      <div style={{ flex: 1, overflow: 'auto', padding: window.innerWidth < 768 ? '14px 10px' : '24px', minWidth: 0 }}>
         {children}
       </div>
     </div>

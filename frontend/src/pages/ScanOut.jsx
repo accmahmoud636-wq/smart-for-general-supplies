@@ -4,6 +4,7 @@ import { Card, Btn, Badge, PageHeader, C_THEME as C } from '../components/UI';
 import { beep } from '../utils/barcode';
 import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
+import CameraScanner from '../components/CameraScanner';
 
 const REASONS = ['بيع مباشر', 'تالف', 'عينة / هدية', 'تحويل لمخزن تاني', 'أخرى'];
 
@@ -32,7 +33,7 @@ export default function ScanOut() {
           {flash.text}
         </div>
       )}
-      {mode === 'amazon' ? <AmazonMode say={say} /> : <ManualMode say={say} />}
+      {mode === 'amazon' ? <AmazonMode say={say} flash={flash} /> : <ManualMode say={say} flash={flash} />}
     </div>
   );
 }
@@ -48,7 +49,7 @@ async function lookup(code) {
 }
 
 // ═══ طلب أمازون: امسح رقم الطلب ← امسح الأصناف ← تأكيد ═════════
-function AmazonMode({ say }) {
+function AmazonMode({ say, flash }) {
   const [order, setOrder] = useState(null);
   const [scanned, setScannedState] = useState({}); // productId → qty
   const scannedRef = useRef({});   // نسخة فورية عشان المسح السريع ورا بعض
@@ -56,6 +57,7 @@ function AmazonMode({ say }) {
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
   const ref = useRef();
+  const [cam, setCam] = useState(false);
   useEffect(() => { ref.current?.focus(); }, [order]);
 
   // المطلوب لكل منتج
@@ -68,9 +70,10 @@ function AmazonMode({ say }) {
   const complete = order && !unmapped.length && Object.keys(need).length > 0 &&
     Object.keys({ ...need, ...scanned }).every(id => (need[id] || 0) === (scanned[id] || 0));
 
-  const onEnter = async () => {
-    const v = code.trim(); setCode('');
-    if (!v) { if (complete) confirmOut(); return; }      // Enter على فاضي = تأكيد لو مكتمل
+  const onEnter = async (raw) => {
+    const fromCam = typeof raw === 'string';
+    const v = (fromCam ? raw : code).trim(); if (!fromCam) setCode('');
+    if (!v) { if (complete && !fromCam) confirmOut(); return; }      // Enter على فاضي = تأكيد لو مكتمل
     if (!order) {
       try {
         const r = await api.get(`/scan/order/${encodeURIComponent(v)}`);
@@ -89,6 +92,8 @@ function AmazonMode({ say }) {
       const n = { ...cur, [id]: (cur[id] || 0) + 1 };
       setScanned(n);
       say(true, `✓ ${p.name} (${n[id]}/${need[id]})`);
+      const done = Object.keys({ ...need, ...n }).every(k => (need[k] || 0) === (n[k] || 0));
+      if (done && !unmapped.length) { setCam(false); say(true, '✅ الطلب اكتمل — اضغط تأكيد الخروج'); }
     } catch (e) { say(false, e.response?.data?.message || 'باركود غير معروف'); }
   };
 
@@ -107,8 +112,12 @@ function AmazonMode({ say }) {
       <div style={{ fontSize: 13, color: C.sub, marginBottom: 8 }}>
         {!order ? '1️⃣ امسح أو اكتب رقم طلب أمازون (من الـ Packing Slip) واضغط Enter' : '2️⃣ امسح باركود كل قطعة — لما يكتمل اضغط Enter أو زرار التأكيد'}
       </div>
-      <input ref={ref} value={code} onChange={e => setCode(e.target.value)} onKeyDown={e => e.key === 'Enter' && onEnter()}
-        placeholder={order ? 'امسح باركود المنتج' : '402-1234567-1234567'} style={bigInput(order ? '#6366f1' : '#f59e0b')} autoFocus />
+      <div style={{ display: 'flex', gap: 8 }}>
+        <input ref={ref} value={code} onChange={e => setCode(e.target.value)} onKeyDown={e => e.key === 'Enter' && onEnter()}
+          placeholder={order ? 'امسح باركود المنتج' : '402-1234567-1234567'} style={bigInput(order ? '#6366f1' : '#f59e0b')} autoFocus />
+        <CamBtn onClick={() => setCam(true)} />
+      </div>
+      <CameraScanner open={cam} onClose={() => setCam(false)} onScan={onEnter} message={flash} continuous title={order ? 'امسح القطع' : 'امسح رقم الطلب'} />
 
       {order && <>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '16px 0 10px' }}>
@@ -137,16 +146,18 @@ function AmazonMode({ say }) {
 }
 
 // ═══ صرف يدوي: امسح الأصناف ← اختار السبب ← تأكيد ═══════════════
-function ManualMode({ say }) {
+function ManualMode({ say, flash }) {
   const [items, setItems] = useState([]); // { product, qty }
   const [code, setCode] = useState('');
   const [reason, setReason] = useState(REASONS[0]);
   const [busy, setBusy] = useState(false);
   const ref = useRef();
+  const [cam, setCam] = useState(false);
   useEffect(() => { ref.current?.focus(); }, []);
 
-  const onEnter = async () => {
-    const v = code.trim(); setCode('');
+  const onEnter = async (raw) => {
+    const fromCam = typeof raw === 'string';
+    const v = (fromCam ? raw : code).trim(); if (!fromCam) setCode('');
     if (!v) return;
     try {
       const p = await lookup(v);
@@ -178,7 +189,11 @@ function ManualMode({ say }) {
   return (
     <Card>
       <div style={{ fontSize: 13, color: C.sub, marginBottom: 8 }}>امسح باركود القطع — كل مسحة = قطعة</div>
-      <input ref={ref} value={code} onChange={e => setCode(e.target.value)} onKeyDown={e => e.key === 'Enter' && onEnter()} placeholder="امسح باركود المنتج" style={bigInput('#6366f1')} />
+      <div style={{ display: 'flex', gap: 8 }}>
+        <input ref={ref} value={code} onChange={e => setCode(e.target.value)} onKeyDown={e => e.key === 'Enter' && onEnter()} placeholder="امسح باركود المنتج" style={bigInput('#6366f1')} />
+        <CamBtn onClick={() => setCam(true)} />
+      </div>
+      <CameraScanner open={cam} onClose={() => setCam(false)} onScan={onEnter} message={flash} continuous title="امسح القطع" />
 
       <div style={{ marginTop: 14 }}>
         {items.map(x => (
@@ -208,3 +223,7 @@ function ManualMode({ say }) {
     </Card>
   );
 }
+
+const CamBtn = ({ onClick }) => (
+  <button onClick={onClick} title="مسح بالكاميرا" style={{ flexShrink: 0, width: 64, background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', border: 'none', borderRadius: 10, fontSize: 26, cursor: 'pointer' }}>📷</button>
+);

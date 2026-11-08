@@ -4,6 +4,7 @@ import { Card, Btn, Badge, Input, Select, Modal, Table, PageHeader, fmt, C_THEME
 import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
 import LabelModal from '../components/LabelModal';
+import CameraScanner from '../components/CameraScanner';
 
 export default function Products() {
   const { can } = useAuth();
@@ -19,6 +20,7 @@ export default function Products() {
   const [adjustQty, setAdjustQty] = useState('');
   const [adjustReason, setAdjustReason] = useState('');
   const [labels, setLabels] = useState(null); // { productId: copies }
+  const [cam, setCam] = useState(''); // 'form' = يملى خانة الباركود، 'search' = يبحث
 
   const load = () => {
     setLoading(true);
@@ -91,6 +93,7 @@ export default function Products() {
         <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="🔍 بحث بالاسم، SKU، ASIN..."
             style={{ flex: 1, minWidth: 200, background: '#0f172a', border: '1px solid #334155', borderRadius: 8, padding: '8px 12px', color: '#e2e8f0', fontSize: 14, outline: 'none' }} />
+          <Btn variant="ghost" onClick={() => setCam('search')}>📷</Btn>
           <div style={{ fontSize: 13, color: '#64748b' }}>{filtered.length} منتج</div>
           <div style={{ fontSize: 13, color: '#ef4444' }}>{filtered.filter(p => p.stock <= p.minStock).length} منخفض المخزون</div>
         </div>
@@ -108,7 +111,7 @@ export default function Products() {
           <Input label="Amazon ASIN" value={form.asin} onChange={v => setForm({...form,asin:v})} placeholder="B08XXXXX" />
           <div style={{ gridColumn: '1/-1', display: 'flex', gap: 8, alignItems: 'flex-end' }}>
             <div style={{ flex: 1 }}><Input label="الباركود (سيبه فاضي = يتولد تلقائي، أو امسح باركود المصنع بالاسكانر)" value={form.barcode} onChange={v => setForm({...form,barcode:v})} placeholder="200000000001X" /></div>
-            <div style={{ marginBottom: 14 }}><Btn variant="ghost" onClick={newBarcode}>🎲 توليد</Btn></div>
+            <div style={{ marginBottom: 14, display: 'flex', gap: 6 }}><Btn variant="ghost" onClick={() => setCam('form')}>📷</Btn><Btn variant="ghost" onClick={newBarcode}>🎲 توليد</Btn></div>
           </div>
           <Select label="الفئة" value={form.category} onChange={v => setForm({...form,category:v})} options={categories.map(c => ({ value: c._id, label: c.name }))} />
           <Select label="المورد" value={form.supplier} onChange={v => setForm({...form,supplier:v})} options={suppliers.map(s => ({ value: s._id, label: s.name }))} />
@@ -124,6 +127,8 @@ export default function Products() {
         </div>
       </Modal>
 
+      <CameraScanner open={!!cam} onClose={() => setCam('')} title={cam === 'form' ? 'امسح باركود المصنع' : 'دوّر بالباركود'}
+        onScan={code => { if (cam === 'form') setForm(f => ({ ...f, barcode: code })); else setSearch(code); }} />
       <LabelModal open={!!labels} onClose={() => setLabels(null)} products={products} initial={labels || {}} />
 
       {/* Adjust Stock Modal */}
