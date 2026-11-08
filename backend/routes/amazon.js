@@ -406,18 +406,29 @@ router.get('/skus', auth, permit('amazon', 'amazon:read'), async (req, res) => {
   } catch (e) { res.status(500).json({ message: e.message }); }
 });
 
-router.post('/skus/map', auth, permit('amazon'), async (req, res) => {
+// كل الربط (عشان كارت الصنف وقائمة المنتجات)
+router.get('/skus/maps', auth, async (req, res) => {
+  const maps = await AmazonSkuMap.find().sort('sku').lean();
+  res.json(maps.map(m => ({ sku: m.sku, product: String(m.product) })));
+});
+
+router.post('/skus/map', auth, permit('amazon', 'products'), async (req, res) => {
   try {
-    const { sku, product } = req.body;
+    const sku = String(req.body.sku || '').trim();
+    const { product, force } = req.body;
     if (!sku || !product) return res.status(400).json({ message: 'SKU والمنتج مطلوبين' });
+    const existing = await AmazonSkuMap.findOne({ sku }).populate('product', 'name').lean();
+    if (existing && String(existing.product?._id) !== String(product) && !force)
+      return res.status(409).json({ message: `الـ SKU ده مربوط بصنف تاني: ${existing.product?.name || '؟'}`, otherProduct: existing.product?.name });
     await AmazonSkuMap.findOneAndUpdate({ sku }, { sku, product }, { upsert: true });
     await AmazonOrder.updateMany({ sku }, { product });
     res.json({ message: 'تم الربط' });
   } catch (e) { res.status(400).json({ message: e.message }); }
 });
 
-router.delete('/skus/map/:sku', auth, permit('amazon'), async (req, res) => {
+router.delete('/skus/map/:sku', auth, permit('amazon', 'products'), async (req, res) => {
   await AmazonSkuMap.deleteOne({ sku: req.params.sku });
+  await AmazonOrder.updateMany({ sku: req.params.sku, manual: { $ne: true } }, { $unset: { product: 1 } });
   res.json({ message: 'تم فك الربط' });
 });
 

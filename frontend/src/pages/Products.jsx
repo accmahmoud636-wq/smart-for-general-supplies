@@ -20,27 +20,55 @@ export default function Products() {
   const [adjustQty, setAdjustQty] = useState('');
   const [adjustReason, setAdjustReason] = useState('');
   const [labels, setLabels] = useState(null); // { productId: copies }
-  const [cam, setCam] = useState(''); // 'form' = يملى خانة الباركود، 'search' = يبحث
+  const [cam, setCam] = useState('');
+  const [maps, setMaps] = useState([]);          // كل ربط SKU أمازون ← صنف
+  const [skus, setSkus] = useState([]);          // SKUs الصنف المفتوح في الكارت
+  const [skuInput, setSkuInput] = useState('');
+  const [moveSkus, setMoveSkus] = useState([]);  // SKUs هتتنقل من صنف تاني // 'form' = يملى خانة الباركود، 'search' = يبحث
 
   const load = () => {
     setLoading(true);
-    Promise.all([api.get('/products'), api.get('/categories'), api.get('/suppliers')])
-      .then(([p, c, s]) => { setProducts(p.data); setCategories(c.data); setSuppliers(s.data); })
+    Promise.all([api.get('/products'), api.get('/categories'), api.get('/suppliers'), api.get('/amazon/skus/maps').catch(() => ({ data: [] }))])
+      .then(([p, c, s, m]) => { setProducts(p.data); setCategories(c.data); setSuppliers(s.data); setMaps(m.data); })
       .catch(() => toast.error('خطأ في التحميل'))
       .finally(() => setLoading(false));
   };
 
   useEffect(() => { load(); }, []);
 
-  const filtered = products.filter(p => !search || p.name?.toLowerCase().includes(search.toLowerCase()) || p.sku?.toLowerCase().includes(search.toLowerCase()) || p.asin?.toLowerCase().includes(search.toLowerCase()) || p.barcode?.includes(search));
+  const filtered = products.filter(p => !search || p.name?.toLowerCase().includes(search.toLowerCase()) || p.sku?.toLowerCase().includes(search.toLowerCase()) || p.asin?.toLowerCase().includes(search.toLowerCase()) || p.barcode?.includes(search) || maps.some(m => m.product === p._id && m.sku.toLowerCase().includes(search.toLowerCase())));
 
-  const openNew = () => { setEditing(null); setForm({ name:'', sku:'', asin:'', barcode:'', category:'', supplier:'', buyPrice:'', sellPrice:'', stock:'0', minStock:'5', unit:'قطعة', description:'' }); setModal(true); };
-  const openEdit = (p) => { setEditing(p._id); setForm({ name:p.name, sku:p.sku||'', asin:p.asin||'', barcode:p.barcode||'', category:p.category?._id||'', supplier:p.supplier?._id||'', buyPrice:p.buyPrice, sellPrice:p.sellPrice, stock:p.stock, minStock:p.minStock, unit:p.unit, description:p.description||'' }); setModal(true); };
+  const skusOf = (id) => maps.filter(m => m.product === id).map(m => m.sku);
+  const nameOf = (id) => products.find(p => p._id === id)?.name || 'صنف تاني';
+
+  const addSku = () => {
+    const v = skuInput.trim();
+    if (!v) return;
+    if (skus.some(x => x.toLowerCase() === v.toLowerCase())) { toast.error('موجود بالفعل'); return; }
+    const other = maps.find(m => m.sku.toLowerCase() === v.toLowerCase() && m.product !== editing);
+    if (other && !confirm(`الـ SKU «${v}» مربوط بـ «${nameOf(other.product)}». تنقله للصنف ده؟`)) return;
+    if (other) setMoveSkus(x => [...x, v]);
+    setSkus(x => [...x, v]); setSkuInput('');
+  };
+
+  // يطبّق الفرق بين SKUs الكارت والمحفوظ
+  const syncSkus = async (productId) => {
+    const before = skusOf(productId);
+    const added = skus.filter(x => !before.includes(x));
+    const removed = before.filter(x => !skus.includes(x));
+    for (const sku of added) await api.post('/amazon/skus/map', { sku, product: productId, force: moveSkus.includes(sku) });
+    for (const sku of removed) await api.delete(`/amazon/skus/map/${encodeURIComponent(sku)}`);
+  };
+
+  const openNew = () => { setSkus([]); setSkuInput(''); setMoveSkus([]); setEditing(null); setForm({ name:'', sku:'', asin:'', barcode:'', category:'', supplier:'', buyPrice:'', sellPrice:'', stock:'0', minStock:'5', unit:'قطعة', description:'' }); setModal(true); };
+  const openEdit = (p) => { setSkus(skusOf(p._id)); setSkuInput(''); setMoveSkus([]); setEditing(p._id); setForm({ name:p.name, sku:p.sku||'', asin:p.asin||'', barcode:p.barcode||'', category:p.category?._id||'', supplier:p.supplier?._id||'', buyPrice:p.buyPrice, sellPrice:p.sellPrice, stock:p.stock, minStock:p.minStock, unit:p.unit, description:p.description||'' }); setModal(true); };
 
   const save = async () => {
     try {
+      let id = editing;
       if (editing) await api.put(`/products/${editing}`, form);
-      else await api.post('/products', form);
+      else id = (await api.post('/products', form)).data._id;
+      await syncSkus(id);
       toast.success(editing ? 'تم التحديث' : 'تم الإضافة');
       setModal(false); load();
     } catch(e) { toast.error(e.response?.data?.message || 'خطأ'); }
@@ -66,7 +94,7 @@ export default function Products() {
   };
 
   const columns = [
-    { key: 'name', title: 'المنتج', render: (v, r) => <div><div style={{ fontWeight: 600 }}>{v}</div><div style={{ fontSize: 11, color: '#64748b' }}>{r.sku} · {r.asin}</div>{r.barcode && <div style={{ fontSize: 11, color: '#818cf8', fontFamily: 'monospace' }}>▮▯▮ {r.barcode}</div>}</div> },
+    { key: 'name', title: 'المنتج', render: (v, r) => <div><div style={{ fontWeight: 600 }}>{v}</div><div style={{ fontSize: 11, color: '#64748b' }}>{r.sku} · {r.asin}</div>{r.barcode && <div style={{ fontSize: 11, color: '#818cf8', fontFamily: 'monospace' }}>▮▯▮ {r.barcode}</div>}{skusOf(r._id).length > 0 && <div title={skusOf(r._id).join('\n')} style={{ fontSize: 11, color: '#f59e0b' }}>🔗 {skusOf(r._id).length} إعلان أمازون</div>}</div> },
     { key: 'category', title: 'الفئة', render: (v) => v ? <Badge color={v.color || '#6366f1'}>{v.name}</Badge> : '—' },
     { key: 'buyPrice', title: 'سعر الشراء', render: v => `${fmt(v)} ر.س` },
     { key: 'sellPrice', title: 'سعر البيع', render: v => `${fmt(v)} ر.س` },
@@ -112,6 +140,24 @@ export default function Products() {
           <div style={{ gridColumn: '1/-1', display: 'flex', gap: 8, alignItems: 'flex-end' }}>
             <div style={{ flex: 1 }}><Input label="الباركود (سيبه فاضي = يتولد تلقائي، أو امسح باركود المصنع بالاسكانر)" value={form.barcode} onChange={v => setForm({...form,barcode:v})} placeholder="200000000001X" /></div>
             <div style={{ marginBottom: 14, display: 'flex', gap: 6 }}><Btn variant="ghost" onClick={() => setCam('form')}>📷</Btn><Btn variant="ghost" onClick={newBarcode}>🎲 توليد</Btn></div>
+          </div>
+          <div style={{ gridColumn: '1/-1', marginBottom: 14, padding: 12, border: '1px dashed #334155', borderRadius: 10 }}>
+            <label style={{ display: 'block', fontSize: 12, color: '#94a3b8', marginBottom: 6, fontWeight: 600 }}>🔗 SKUs أمازون للصنف ده (كل إعلان ليه SKU — ضيفهم كلهم هنا)</label>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
+              {form.sku && <Badge color="#64748b">{form.sku} (SKU الصنف)</Badge>}
+              {skus.map(x => (
+                <span key={x} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: '#f59e0b22', color: '#fbbf24', border: '1px solid #f59e0b44', borderRadius: 20, padding: '3px 6px 3px 10px', fontSize: 12, fontFamily: 'monospace' }}>
+                  {x}{moveSkus.includes(x) && ' ↩'}
+                  <button onClick={() => setSkus(skus.filter(y => y !== x))} style={{ background: 'none', border: 'none', color: '#f87171', cursor: 'pointer', fontSize: 14, lineHeight: 1 }}>×</button>
+                </span>
+              ))}
+              {!skus.length && !form.sku && <span style={{ fontSize: 12, color: '#64748b' }}>مفيش SKUs لسه</span>}
+            </div>
+            <div style={{ display: 'flex', gap: 6 }}>
+              <input value={skuInput} onChange={e => setSkuInput(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addSku(); } }} placeholder="اكتب SKU الإعلان واضغط Enter"
+                style={{ flex: 1, background: '#0f172a', border: '1px solid #334155', borderRadius: 8, padding: '8px 12px', color: '#e2e8f0', fontSize: 13, outline: 'none', direction: 'ltr' }} />
+              <Btn variant="ghost" onClick={addSku}>+ إضافة</Btn>
+            </div>
           </div>
           <Select label="الفئة" value={form.category} onChange={v => setForm({...form,category:v})} options={categories.map(c => ({ value: c._id, label: c.name }))} />
           <Select label="المورد" value={form.supplier} onChange={v => setForm({...form,supplier:v})} options={suppliers.map(s => ({ value: s._id, label: s.name }))} />

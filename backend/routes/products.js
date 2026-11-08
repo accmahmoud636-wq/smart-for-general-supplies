@@ -99,7 +99,14 @@ prodRouter.get('/barcode/:code', auth, async (req, res) => {
   const esc = code.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const exact = new RegExp('^' + esc + '$', 'i');
   const p = await Product.findOne({ active: { $ne: false }, $or: [{ barcode: code }, { sku: exact }, { asin: exact }] }).lean();
-  if (!p) return res.status(404).json({ message: 'باركود غير مسجل: ' + code });
+  if (!p) {
+    // يمكن يكون SKU إعلان أمازون مربوط بالصنف
+    const { AmazonSkuMap } = require('../models/amazon');
+    const m = await AmazonSkuMap.findOne({ sku: exact }).lean();
+    const mp = m && await Product.findOne({ _id: m.product, active: { $ne: false } }).lean();
+    if (mp) return res.json(mp);
+    return res.status(404).json({ message: 'باركود غير مسجل: ' + code });
+  }
   res.json(p);
 });
 
