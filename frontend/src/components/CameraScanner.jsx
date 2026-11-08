@@ -26,7 +26,6 @@ export default function CameraScanner({ open, onClose, onScan, continuous = fals
         const now = Date.now();
         if (text === last.current.code && now - last.current.t < 1500) return;
         last.current = { code: text, t: now };
-        try { navigator.vibrate?.(60); } catch { /* */ }
         cb.current(text.trim());
         if (!continuous) close();
       },

@@ -63,16 +63,51 @@ export function printLabels(items, sizeKey = '50x25', { showName = true, showPri
   return true;
 }
 
-// صوت للاسكانر: نجاح / خطأ
+// ─── أصوات الاسكانر ────────────────────────────────────────────
+// نجاح: "بيب" عالي قصير زي اسكانر السوبرماركت — خطأ: 3 "بززز" واطية واضحة
 let ctx;
+function audio() {
+  ctx ||= new (window.AudioContext || window.webkitAudioContext)();
+  if (ctx.state === 'suspended') ctx.resume();
+  return ctx;
+}
+// المتصفح (خصوصاً الآيفون) ما بيشغلش صوت غير بعد أول لمسة أو زرار — نفتح الصوت من أول تفاعل
+if (typeof window !== 'undefined') {
+  const unlock = () => {
+    try {
+      const c = audio();
+      const b = c.createBuffer(1, 1, 22050), s = c.createBufferSource();
+      s.buffer = b; s.connect(c.destination); s.start(0);
+    } catch { /* */ }
+    window.removeEventListener('pointerdown', unlock);
+    window.removeEventListener('keydown', unlock);
+  };
+  window.addEventListener('pointerdown', unlock);
+  window.addEventListener('keydown', unlock);
+}
+
+function tone(c, freq, start, dur, type, vol) {
+  const o = c.createOscillator(), g = c.createGain();
+  o.type = type; o.frequency.value = freq;
+  o.connect(g); g.connect(c.destination);
+  const t = c.currentTime + start;
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(vol, t + 0.01);       // من غير "طقّة" في الأول
+  g.gain.setValueAtTime(vol, t + dur - 0.02);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  o.start(t); o.stop(t + dur + 0.02);
+}
+
 export function beep(ok = true) {
   try {
-    ctx ||= new (window.AudioContext || window.webkitAudioContext)();
-    const o = ctx.createOscillator(), g = ctx.createGain();
-    o.connect(g); g.connect(ctx.destination);
-    o.frequency.value = ok ? 1200 : 220;
-    o.type = ok ? 'sine' : 'square';
-    g.gain.value = 0.15;
-    o.start(); o.stop(ctx.currentTime + (ok ? 0.08 : 0.35));
+    const c = audio();
+    if (ok) {
+      tone(c, 1850, 0, 0.12, 'square', 0.25);              // بيب واحدة عالية
+    } else {
+      tone(c, 160, 0, 0.18, 'sawtooth', 0.45);             // بززز ×3
+      tone(c, 160, 0.24, 0.18, 'sawtooth', 0.45);
+      tone(c, 120, 0.48, 0.35, 'sawtooth', 0.45);
+    }
   } catch { /* بدون صوت */ }
+  try { navigator.vibrate?.(ok ? 60 : [200, 80, 200, 80, 300]); } catch { /* */ }
 }

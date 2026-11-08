@@ -24,7 +24,10 @@ export default function ScanOut() {
 
   return (
     <div style={{ maxWidth: 900 }}>
-      <PageHeader title="خروج بضاعة بالاسكانر" icon="📤" />
+      <PageHeader title="خروج بضاعة بالاسكانر" icon="📤" actions={[
+        <Btn key="ok" size="sm" variant="ghost" onClick={() => beep(true)}>🔊 صوت صح</Btn>,
+        <Btn key="err" size="sm" variant="ghost" onClick={() => beep(false)}>🔊 صوت غلط</Btn>
+      ]} />
       <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
         {canAmazon && <ModeBtn on={mode === 'dispatch'} onClick={() => { setMode('dispatch'); setFlash(null); }}>🚚 خروج لأمازون</ModeBtn>}
         {canAmazon && <ModeBtn on={mode === 'amazon'} onClick={() => { setMode('amazon'); setFlash(null); }}>🛒 بطلب محدد</ModeBtn>}
