@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import api from '../utils/api';
-import { Card, Btn, Badge, Input, Select, Modal, Table, PageHeader, StatCard, fmt, fmtDate, C_THEME as C } from '../components/UI';
+import { Card, Btn, Badge, Input, Select, Modal, Table, PageHeader, StatCard, fmt, fmtDate, C_THEME as C, THEME } from '../components/UI';
 import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
+
+const CUR = THEME.currency || 'ج.م';
 
 // ═══════════════════════════════════════════════════════════
 // CATEGORIES
@@ -30,7 +32,7 @@ export function Categories() {
       <Modal open={modal} onClose={() => setModal(false)} title={editing ? 'تعديل' : 'إضافة فئة'} width={400}>
         <Input label="الاسم" value={form.name} onChange={v => setForm({...form,name:v})} required />
         <Input label="الوصف" value={form.description} onChange={v => setForm({...form,description:v})} />
-        <div style={{marginBottom:14}}><label style={{fontSize:12,color:'#94a3b8',display:'block',marginBottom:6,fontWeight:600}}>اللون</label><input type="color" value={form.color} onChange={e=>setForm({...form,color:e.target.value})} style={{width:60,height:36,borderRadius:8,border:'none',cursor:'pointer',background:'none'}} /></div>
+        <div style={{marginBottom:14}}><label style={{fontSize:12,color:'var(--sub)',display:'block',marginBottom:6,fontWeight:600}}>اللون</label><input type="color" value={form.color} onChange={e=>setForm({...form,color:e.target.value})} style={{width:60,height:36,borderRadius:8,border:'none',cursor:'pointer',background:'none'}} /></div>
         <div style={{display:'flex',gap:8,justifyContent:'flex-end'}}><Btn variant="ghost" onClick={()=>setModal(false)}>إلغاء</Btn><Btn onClick={save}>💾 حفظ</Btn></div>
       </Modal>
     </div>
@@ -52,7 +54,7 @@ export function Suppliers() {
   const cols = [
     { key:'name', title:'اسم المورد', render:v=><span style={{fontWeight:600}}>{v}</span> },
     { key:'country', title:'الدولة' }, { key:'phone', title:'الهاتف' }, { key:'email', title:'البريد' },
-    { key:'balance', title:'الرصيد', render:v=><span style={{color:v>0?'#ef4444':'#10b981',fontWeight:700}}>{fmt(v)} ر.س</span> },
+    { key:'balance', title:'الرصيد', render:v=><span style={{color:v>0?'#ef4444':'#10b981',fontWeight:700}}>{fmt(v)} {CUR}</span> },
     { key:'_id', title:'إجراءات', render:(_,r) => can('suppliers') && <Btn size="sm" variant="ghost" onClick={() => openEdit(r)}>✏️</Btn> }
   ];
   return (
@@ -128,21 +130,21 @@ export function Expenses() {
     { key:'category', title:'الفئة', render:v=><Badge color="#f59e0b">{v}</Badge> },
     { key:'description', title:'الوصف' },
     { key:'paymentMethod', title:'طريقة الدفع', render:v=>({cash:'نقداً',bank:'بنك',card:'بطاقة',other:'أخرى'}[v]||v) },
-    { key:'amount', title:'المبلغ', render:v=><span style={{color:'#ef4444',fontWeight:700}}>{fmt(v)} ر.س</span> },
+    { key:'amount', title:'المبلغ', render:v=><span style={{color:'#ef4444',fontWeight:700}}>{fmt(v)} {CUR}</span> },
     { key:'_id', title:'إجراءات', render:(_,r) => can('expenses') && <Btn size="sm" variant="danger" onClick={() => del(r._id)}>🗑️</Btn> }
   ];
   return (
     <div>
       <PageHeader title="المصروفات" icon="💸" actions={can('expenses') && [<Btn key="a" onClick={openNew}>+ إضافة مصروف</Btn>]} />
       <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:14,marginBottom:16}}>
-        <StatCard label="إجمالي المصروفات" value={`${fmt(total)} ر.س`} icon="💸" color="#ef4444" />
+        <StatCard label="إجمالي المصروفات" value={`${fmt(total)} ${CUR}`} icon="💸" color="#ef4444" />
         <StatCard label="عدد العمليات" value={items.length} icon="📋" color="#f59e0b" />
-        <StatCard label="متوسط المصروف" value={`${fmt(items.length?total/items.length:0)} ر.س`} icon="📊" color="#6366f1" />
+        <StatCard label="متوسط المصروف" value={`${fmt(items.length?total/items.length:0)} ${CUR}`} icon="📊" color="#6366f1" />
       </div>
       <Card><Table columns={cols} data={items} /></Card>
       <Modal open={modal} onClose={() => setModal(false)} title="إضافة مصروف" width={460}>
         <Select label="الفئة" value={form.category} onChange={v=>setForm({...form,category:v})} required options={EXP_CATS.map(c=>({value:c,label:c}))} />
-        <Input label="المبلغ (ر.س)" type="number" value={form.amount} onChange={v=>setForm({...form,amount:v})} required />
+        <Input label={`المبلغ (${CUR})`} type="number" value={form.amount} onChange={v=>setForm({...form,amount:v})} required />
         <Input label="الوصف" value={form.description} onChange={v=>setForm({...form,description:v})} />
         <Input label="التاريخ" type="date" value={form.date} onChange={v=>setForm({...form,date:v})} />
         <Select label="طريقة الدفع" value={form.paymentMethod} onChange={v=>setForm({...form,paymentMethod:v})} options={[{value:'cash',label:'نقداً'},{value:'bank',label:'تحويل بنكي'},{value:'card',label:'بطاقة'},{value:'other',label:'أخرى'}]} />
@@ -193,7 +195,7 @@ export function Users() {
   const save = async () => { try { const d = {...form}; if(!d.password) delete d.password; if(editing) await api.put(`/users/${editing}`,d); else await api.post('/users',d); toast.success('تم'); setModal(false); load(); } catch(e){ toast.error(e.response?.data?.message||'خطأ'); } };
   const del = async (id) => { if(!confirm('حذف المستخدم؟')) return; try{ await api.delete(`/users/${id}`); toast.success('تم'); load(); }catch(e){ toast.error(e.response?.data?.message||'خطأ'); } };
   const cols = [
-    { key:'name', title:'الاسم', render:(v,r)=><div><div style={{fontWeight:600}}>{v}{r._id===me?._id&&' (أنت)'}</div><div style={{fontSize:11,color:'#64748b'}}>{r.email}</div></div> },
+    { key:'name', title:'الاسم', render:(v,r)=><div><div style={{fontWeight:600}}>{v}{r._id===me?._id&&' (أنت)'}</div><div style={{fontSize:11,color:'var(--muted)'}}>{r.email}</div></div> },
     { key:'role', title:'الدور', render:(v,r)=><Badge color={ROLE_COLORS2[v]}>{r.roleLabel||v}</Badge> },
     { key:'active', title:'الحالة', render:v=><Badge color={v?'#10b981':'#ef4444'}>{v?'نشط':'معطل'}</Badge> },
     { key:'lastLogin', title:'آخر دخول', render:v=>fmtDate(v) },
@@ -202,7 +204,7 @@ export function Users() {
       {me?.role==='superadmin' && r._id!==me._id && <Btn size="sm" variant="danger" onClick={()=>del(r._id)}>🗑️</Btn>}
     </div> }
   ];
-  if (!can('all')) return <div style={{textAlign:'center',padding:80,color:'#64748b'}}>🔒 غير مصرح بالوصول</div>;
+  if (!can('all')) return <div style={{textAlign:'center',padding:80,color:'var(--muted)'}}>🔒 غير مصرح بالوصول</div>;
   return (
     <div>
       <PageHeader title="إدارة المستخدمين" icon="👤" actions={[<Btn key="a" onClick={openNew}>+ مستخدم جديد</Btn>]} />
@@ -240,8 +242,8 @@ export function Reports() {
       <PageHeader title={kind === 'inventory' ? 'تقارير المخزون' : 'التقارير المالية'} icon={kind === 'inventory' ? '📦' : '📈'} />
       <Card style={{marginBottom:16}}>
         <div style={{display:'flex',gap:12,alignItems:'flex-end',flexWrap:'wrap'}}>
-          <div><label style={{fontSize:12,color:'#94a3b8',display:'block',marginBottom:5,fontWeight:600}}>من تاريخ</label><input type="date" value={from} onChange={e=>setFrom(e.target.value)} style={{background:'var(--bg)',border:'1px solid var(--border)',borderRadius:8,padding:'8px 12px',color:'#e2e8f0',fontSize:14,outline:'none'}} /></div>
-          <div><label style={{fontSize:12,color:'#94a3b8',display:'block',marginBottom:5,fontWeight:600}}>إلى تاريخ</label><input type="date" value={to} onChange={e=>setTo(e.target.value)} style={{background:'var(--bg)',border:'1px solid var(--border)',borderRadius:8,padding:'8px 12px',color:'#e2e8f0',fontSize:14,outline:'none'}} /></div>
+          <div><label style={{fontSize:12,color:'var(--sub)',display:'block',marginBottom:5,fontWeight:600}}>من تاريخ</label><input type="date" value={from} onChange={e=>setFrom(e.target.value)} style={{background:'var(--bg)',border:'1px solid var(--border)',borderRadius:8,padding:'8px 12px',color:'var(--text)',fontSize:14,outline:'none'}} /></div>
+          <div><label style={{fontSize:12,color:'var(--sub)',display:'block',marginBottom:5,fontWeight:600}}>إلى تاريخ</label><input type="date" value={to} onChange={e=>setTo(e.target.value)} style={{background:'var(--bg)',border:'1px solid var(--border)',borderRadius:8,padding:'8px 12px',color:'var(--text)',fontSize:14,outline:'none'}} /></div>
           <Btn onClick={load} disabled={loading}>🔍 عرض</Btn>
         </div>
       </Card>
@@ -258,20 +260,20 @@ export function Reports() {
               {label:'صافي الربح',val:pl.netProfit,color:pl.netProfit>=0?'#10b981':'#ef4444',bold:true,border:true},
             ].map(r=>(
               <div key={r.label} style={{display:'flex',justifyContent:'space-between',padding:'9px 0',borderTop:r.border?'2px solid var(--border)':'1px solid var(--border)',marginTop:r.border?6:0}}>
-                <span style={{fontSize:13,color:'#94a3b8'}}>{r.label}</span>
-                <span style={{fontSize:13,color:r.color,fontWeight:r.bold?800:600}}>{r.val>=0?'+':''}{fmt(r.val)} ر.س</span>
+                <span style={{fontSize:13,color:'var(--sub)'}}>{r.label}</span>
+                <span style={{fontSize:13,color:r.color,fontWeight:r.bold?800:600}}>{r.val>=0?'+':''}{fmt(r.val)} {CUR}</span>
               </div>
             ))}
           </Card>}
           {kind === 'inventory' && <Card>
             <div style={{fontWeight:700,marginBottom:16,fontSize:15}}>📦 ملخص المخزون</div>
             {inv && <>
-              <StatCard label="قيمة المخزون الكلية" value={`${fmt(inv.totalValue)} ر.س`} icon="💰" color="#3b82f6" />
+              <StatCard label="قيمة المخزون الكلية" value={`${fmt(inv.totalValue)} ${CUR}`} icon="💰" color="#3b82f6" />
               <div style={{marginTop:12}}><StatCard label="منتجات منخفضة المخزون" value={inv.lowStockCount} icon="⚠️" color="#ef4444" /></div>
               <div style={{marginTop:12,maxHeight:420,overflowY:'auto'}}>
                 {inv.products?.filter(p=>p.lowStock).map(p=>(
                   <div key={p._id} style={{display:'flex',justifyContent:'space-between',padding:'6px 0',borderBottom:'1px solid var(--border)',fontSize:12}}>
-                    <span style={{color:'#e2e8f0'}}>{p.name}</span>
+                    <span style={{color:'var(--text)'}}>{p.name}</span>
                     <span style={{color:'#ef4444',fontWeight:700}}>{p.stock} متبقي (حد: {p.minStock})</span>
                   </div>
                 ))}

@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import api from '../utils/api';
 import { Card, Btn, Badge, Input, Modal, Table, PageHeader, fmtDate, C_THEME as C, ACCENTS, BASES, THEME, THEME_KEY, themeColors } from '../components/UI';
 import { Employees } from './Shipments';
+import { readReportFile } from '../utils/parseReport';
 import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
 
@@ -10,6 +11,7 @@ const TABS = [
   ['employees', '👤 الموظفين', 'settings:read'],
   ['users', '🔐 المستخدمين والصلاحيات', 'all'],
   ['theme', '🎨 المظهر والألوان', 'settings:read'],
+  ['data', '📂 البيانات والاستيراد', 'products'],
 ];
 const err = (e) => e.response?.data?.message || e.message || 'خطأ';
 
@@ -31,6 +33,7 @@ export default function Settings() {
       {tab === 'employees' && <Employees />}
       {tab === 'users' && <UsersPerms />}
       {tab === 'theme' && <Theme />}
+      {tab === 'data' && <DataTab />}
     </div>
   );
 }
@@ -161,7 +164,7 @@ function UsersPerms() {
     </div>
   );
 }
-const sel = { background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8, padding: '9px 12px', color: '#e2e8f0', fontSize: 14, outline: 'none', width: '100%' };
+const sel = { background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8, padding: '9px 12px', color: 'var(--text)', fontSize: 14, outline: 'none', width: '100%' };
 
 // ═══ المظهر والألوان ═══════════════════════════════════════════
 function Theme() {
@@ -189,10 +192,16 @@ function Theme() {
   return (
     <div style={{ maxWidth: 820 }}>
       <Card style={{ marginBottom: 14 }}>
-        <div style={{ fontWeight: 700, marginBottom: 12 }}>اسم المنصة</div>
+        <div style={{ fontWeight: 700, marginBottom: 12 }}>اسم المنصة والعملة</div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 12px' }}>
           <Input label="الاسم (فوق في الشريط الجانبي)" value={t.appName} onChange={v => edit && setT({ ...t, appName: v })} />
           <Input label="السطر الصغير تحته" value={t.appSub} onChange={v => edit && setT({ ...t, appSub: v })} />
+          <div style={{ marginBottom: 14 }}>
+            <label style={{ display: 'block', fontSize: 12, color: C.sub, marginBottom: 5, fontWeight: 600 }}>العملة اللي بتظهر جنب المبالغ</label>
+            <select value={t.currency || 'ج.م'} disabled={!edit} onChange={e => setT({ ...t, currency: e.target.value })} style={sel}>
+              {[['ج.م', 'جنيه مصري (ج.م)'], ['ر.س', 'ريال سعودي (ر.س)'], ['د.إ', 'درهم إماراتي (د.إ)'], ['$', 'دولار ($)']].map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+            </select>
+          </div>
         </div>
       </Card>
 
@@ -241,5 +250,131 @@ function Theme() {
         ? <Btn size="lg" onClick={save} disabled={busy}>💾 حفظ وتطبيق على كل المستخدمين</Btn>
         : <div style={{ color: C.muted, fontSize: 13 }}>🔒 عرض بس — مش عندك صلاحية تعديل المظهر</div>}
     </div>
+  );
+}
+
+// ═══ البيانات: استيراد الأصناف + تصفير ═══════════════════════════
+const TEMPLATE_HEAD = ['اسم الصنف', 'SKU', 'ASIN', 'الباركود', 'سعر الشراء', 'سعر البيع', 'الكمية', 'حد التنبيه', 'الفئة', 'المورد', 'SKUs أمازون'];
+const COL_LABELS = { name: 'الاسم', sku: 'SKU', asin: 'ASIN', barcode: 'الباركود', buyPrice: 'سعر الشراء', sellPrice: 'سعر البيع', stock: 'الكمية', minStock: 'حد التنبيه', category: 'الفئة', supplier: 'المورد', unit: 'الوحدة', extraSkus: 'SKUs أمازون' };
+
+function DataTab() {
+  const { user } = useAuth();
+  const isSuper = user?.role === 'superadmin';
+  const [rows, setRows] = useState(null);
+  const [fileName, setFileName] = useState('');
+  const [pv, setPv] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState(null);
+
+  const template = async () => {
+    const XLSX = await import('xlsx');
+    const ws = XLSX.utils.aoa_to_sheet([TEMPLATE_HEAD, ['كنكة قهوة 3 فناجين', 'J5-HA7P-GAT0', 'B0XXXXXXX', '', 150, 286, 20, 5, 'مطبخ', 'مورد العتبة', 'MOKA-2, MOKA-RED']]);
+    ws['!cols'] = TEMPLATE_HEAD.map(() => ({ wch: 18 }));
+    const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'الأصناف');
+    XLSX.writeFile(wb, 'نموذج-الأصناف.xlsx');
+  };
+
+  const pick = async (file) => {
+    if (!file) return;
+    setBusy(true); setResult(null); setPv(null);
+    try {
+      const r = await readReportFile(file);
+      setRows(r); setFileName(file.name);
+      const { data } = await api.post('/admin/products/preview', { rows: r });
+      setPv(data);
+    } catch (e) { toast.error(err(e)); setRows(null); }
+    setBusy(false);
+  };
+  const doImport = async () => {
+    if (!confirm(`تسجيل ${pv.total} صنف؟\n(${pv.newCount} جديد، ${pv.total - pv.newCount} موجود هيتحدّث)`)) return;
+    setBusy(true);
+    try { const { data } = await api.post('/admin/products/import', { rows }); setResult(data); setPv(null); toast.success(data.message); }
+    catch (e) { toast.error(err(e)); }
+    setBusy(false);
+  };
+
+  return (
+    <div style={{ maxWidth: 1000 }}>
+      <Card style={{ marginBottom: 14 }}>
+        <div style={{ fontWeight: 800, fontSize: 16, marginBottom: 6 }}>⬆️ استيراد الأصناف من Excel</div>
+        <div style={{ fontSize: 13, color: C.sub, lineHeight: 1.9, marginBottom: 12 }}>
+          ارفع ملف Excel أو CSV فيه عمود <b>اسم الصنف</b> على الأقل — وأي أعمدة تانية موجودة (SKU، ASIN، الباركود، سعر الشراء، سعر البيع، الكمية، الفئة، المورد) بتتقري لوحدها بالعربي أو الإنجليزي.
+          الصنف الموجود (بنفس SKU أو الباركود أو الاسم) بيتحدّث، والجديد بيتعمل وياخد باركود تلقائي لو ملوش. الكمية بتتسجل «رصيد افتتاحي» في حركة المخزون.
+        </div>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: `linear-gradient(135deg,${C.accent},${C.accent2})`, color: '#fff', borderRadius: 8, padding: '10px 18px', fontWeight: 700, cursor: 'pointer', fontSize: 14 }}>
+            {busy ? '⏳ ...' : '📁 اختار ملف الأصناف'}
+            <input type="file" accept=".xlsx,.xls,.csv,.txt" style={{ display: 'none' }} disabled={busy} onChange={e => { pick(e.target.files[0]); e.target.value = ''; }} />
+          </label>
+          <Btn variant="ghost" onClick={template}>⬇️ نزّل نموذج Excel فاضي</Btn>
+        </div>
+      </Card>
+
+      {pv && (
+        <Card style={{ marginBottom: 14, padding: 0 }}>
+          <div style={{ padding: 14, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <div>
+              <div style={{ fontWeight: 700 }}>📄 {fileName} — {pv.total} صنف <Badge color="#10b981">{pv.newCount} جديد</Badge> <Badge color="#3b82f6">{pv.total - pv.newCount} هيتحدّث</Badge></div>
+              <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>الأعمدة اللي اتفهمت: {pv.columns.map(c => COL_LABELS[c] || c).join('، ')}</div>
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <Btn variant="ghost" onClick={() => { setPv(null); setRows(null); }}>إلغاء</Btn>
+              <Btn variant="success" onClick={doImport} disabled={busy}>✅ سجّل الأصناف</Btn>
+            </div>
+          </div>
+          <Table columns={[
+            { key: 'name', title: 'الصنف', render: (v, r) => <span style={{ fontWeight: 600 }}>{v} {r.exists && <Badge color="#3b82f6">موجود</Badge>}</span> },
+            { key: 'sku', title: 'SKU', render: v => <span dir="ltr">{v || '—'}</span> },
+            { key: 'barcode', title: 'الباركود', render: v => v || <span style={{ color: C.muted, fontSize: 11 }}>تلقائي</span> },
+            { key: 'buyPrice', title: 'شراء', render: v => v ?? '—' },
+            { key: 'sellPrice', title: 'بيع', render: v => v ?? '—' },
+            { key: 'stock', title: 'الكمية', render: v => v ?? '—' },
+            { key: 'category', title: 'الفئة', render: v => v || '—' },
+            { key: 'extraSkus', title: 'SKUs أمازون', render: v => v?.length ? <span dir="ltr" style={{ fontSize: 11 }}>{v.join(', ')}</span> : '—' },
+          ]} data={pv.items.slice(0, 200).map(i => ({ ...i, _id: i.row }))} />
+          {pv.items.length > 200 && <div style={{ padding: 10, fontSize: 12, color: C.muted, textAlign: 'center' }}>بيعرض أول 200 بس — كله هيتسجل</div>}
+        </Card>
+      )}
+
+      {result && (
+        <Card style={{ marginBottom: 14, borderColor: result.errors.length ? '#f59e0b88' : '#10b98188' }}>
+          <div style={{ fontWeight: 700, marginBottom: 6 }}>{result.message}</div>
+          {result.errors.map(e => <div key={e.row} style={{ fontSize: 12, color: '#f87171' }}>سطر {e.row} — {e.name}: {e.message}</div>)}
+        </Card>
+      )}
+
+      {isSuper && <ResetCard />}
+    </div>
+  );
+}
+
+function ResetCard() {
+  const [counts, setCounts] = useState(null);
+  const [pick, setPick] = useState({ products: true, movements: true, shipments: true, amazon: true });
+  const [word, setWord] = useState('');
+  const [busy, setBusy] = useState(false);
+  const load = () => api.get('/admin/counts').then(r => setCounts(r.data)).catch(() => {});
+  useEffect(() => { load(); }, []);
+  const go = async () => {
+    setBusy(true);
+    try { const { data } = await api.post('/admin/reset', { scopes: Object.keys(pick).filter(k => pick[k]), confirm: word }); toast.success(data.message); setWord(''); load(); }
+    catch (e) { toast.error(err(e)); }
+    setBusy(false);
+  };
+  return (
+    <Card style={{ borderColor: '#ef444466' }}>
+      <div style={{ fontWeight: 800, fontSize: 16, color: '#f87171', marginBottom: 6 }}>🗑️ تصفير البيانات</div>
+      <div style={{ fontSize: 13, color: C.sub, marginBottom: 12 }}>المسح نهائي ومش بيرجع. الفواتير والمصروفات والمستخدمين والموظفين والإعدادات مش بيتمسحوا.</div>
+      {counts && Object.entries(counts).map(([k, c]) => (
+        <label key={k} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', fontSize: 14, cursor: 'pointer' }}>
+          <input type="checkbox" checked={!!pick[k]} onChange={e => setPick({ ...pick, [k]: e.target.checked })} />
+          <span>{c.label}</span><Badge color="#64748b">{c.count}</Badge>
+        </label>
+      ))}
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 12, flexWrap: 'wrap' }}>
+        <input value={word} onChange={e => setWord(e.target.value)} placeholder="اكتب: امسح" style={{ background: 'var(--bg)', border: '1px solid #ef444466', borderRadius: 8, padding: '9px 12px', color: 'var(--text)', fontSize: 14, outline: 'none', width: 160 }} />
+        <Btn variant="danger" onClick={go} disabled={busy || word !== 'امسح' || !Object.values(pick).some(Boolean)}>{busy ? '⏳' : '🗑️ امسح المختار'}</Btn>
+      </div>
+    </Card>
   );
 }
