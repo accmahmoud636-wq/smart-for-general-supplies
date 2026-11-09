@@ -228,30 +228,37 @@ function ShipmentEditor({ id: initialId, onBack, onPosted }) {
         <CameraScanner open={cam} onClose={() => setCam(false)} onScan={onScan} message={flash} continuous title={employee ? `تسجيل ${TYPES[mode].label}` : 'مسح بطاقة الموظف'} />
       </Card>
 
-      {/* الأصناف */}
-      <Card style={{ padding: 0, marginBottom: 12 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 14px', borderBottom: `1px solid ${C.border}` }}>
-          <b>الأصناف ({items.length})</b>
-          <span style={{ fontSize: 13 }}><Badge color="#10b981">مبيعات {saleQty}</Badge> <Badge color="#ef4444">مرتجعات {returnQty}</Badge></span>
-        </div>
-        {!items.length && <div style={{ padding: 24, textAlign: 'center', color: C.muted }}>لم تُسجّل أصناف بعد</div>}
-        {items.map((it, i) => (
-          <div key={it.product + it.type} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderBottom: `1px solid ${C.border}33`, flexWrap: 'wrap' }}>
-            <div style={{ flex: 1, minWidth: 160 }}>
-              <div style={{ fontWeight: 700 }}>{it.name}</div>
-              <div style={{ fontSize: 11, color: C.muted, fontFamily: 'monospace' }}><span dir="ltr">{it.barcode}</span>{it.stock !== undefined && ` · الرصيد ${it.stock}`}</div>
+      {/* الأصناف: المبيعات ثم المرتجعات */}
+      {['sale', 'return'].map(type => {
+        const rows = items.map((it, i) => ({ it, i })).filter(x => x.it.type === type);
+        const qty = rows.reduce((t, x) => t + x.it.qty, 0);
+        const T = TYPES[type];
+        return (
+          <Card key={type} style={{ padding: 0, marginBottom: 12, borderTop: `3px solid ${T.color}` }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 14px', borderBottom: `1px solid ${C.border}` }}>
+              <b style={{ color: T.color }}>{type === 'sale' ? 'المبيعات' : 'المرتجعات'}</b>
+              <span style={{ fontSize: 13, color: C.sub }}>{rows.length} صنف · {qty} وحدة</span>
             </div>
-            <select value={it.type} onChange={e => setType(i, e.target.value)} style={{ background: TYPES[it.type].color + '22', border: `1px solid ${TYPES[it.type].color}`, color: TYPES[it.type].color, borderRadius: 8, padding: '8px 10px', fontWeight: 700, fontSize: 13 }}>
-              <option value="sale">مبيعات</option>
-              <option value="return">مرتجع</option>
-            </select>
-            <Btn size="sm" variant="ghost" onClick={() => setQty(i, it.qty - 1)}>−</Btn>
-            <input type="number" value={it.qty} onChange={e => setQty(i, +e.target.value)} style={{ width: 64, textAlign: 'center', background: 'var(--card)', border: `1px solid ${C.border}`, borderRadius: 6, padding: 6, color: 'var(--text)', fontSize: 16, fontWeight: 800 }} />
-            <Btn size="sm" variant="ghost" onClick={() => setQty(i, it.qty + 1)}>+</Btn>
-            <Btn size="sm" variant="ghost" onClick={() => setQty(i, 0)}>🗑️</Btn>
-          </div>
-        ))}
-      </Card>
+            {!rows.length && <div style={{ padding: 18, textAlign: 'center', color: C.muted, fontSize: 13 }}>{type === 'sale' ? 'لم تُسجّل مبيعات بعد' : 'لا توجد مرتجعات'}</div>}
+            {rows.map(({ it, i }) => (
+              <div key={it.product + it.type} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderBottom: `1px solid ${C.border}33`, flexWrap: 'wrap' }}>
+                <div style={{ flex: 1, minWidth: 160 }}>
+                  <div style={{ fontWeight: 700 }}>{it.name}</div>
+                  <div style={{ fontSize: 11, color: C.muted, fontFamily: 'monospace' }}><span dir="ltr">{it.barcode}</span>{it.stock !== undefined && ` · الرصيد ${it.stock}`}</div>
+                </div>
+                <select value={it.type} onChange={e => setType(i, e.target.value)} title="نقل إلى" style={{ background: 'transparent', border: `1px solid ${C.border}`, color: C.sub, borderRadius: 8, padding: '7px 8px', fontSize: 12 }}>
+                  <option value="sale">مبيعات</option>
+                  <option value="return">مرتجع</option>
+                </select>
+                <Btn size="sm" variant="ghost" onClick={() => setQty(i, it.qty - 1)}>−</Btn>
+                <input type="number" value={it.qty} onChange={e => setQty(i, +e.target.value)} style={{ width: 64, textAlign: 'center', background: 'var(--card)', border: `1px solid ${C.border}`, borderRadius: 6, padding: 6, color: 'var(--text)', fontSize: 16, fontWeight: 800 }} />
+                <Btn size="sm" variant="ghost" onClick={() => setQty(i, it.qty + 1)}>+</Btn>
+                <Btn size="sm" variant="ghost" onClick={() => setQty(i, 0)}>🗑️</Btn>
+              </div>
+            ))}
+          </Card>
+        );
+      })}
 
       {short && (
         <Card style={{ marginBottom: 12, borderColor: '#ef444488' }}>
@@ -350,18 +357,33 @@ function ShipmentMatch({ id, onBack }) {
           </div>
         </div>
 
-        <Card style={{ padding: 0, marginBottom: 14 }}>
-          <Table columns={[
-            { key: 'name', title: 'الصنف', render: (v, r) => <div><div style={{ fontWeight: 700 }}>{v}</div>{r.skus.length > 0 && <div style={{ fontSize: 11, color: C.muted, fontFamily: 'monospace', direction: 'ltr', textAlign: 'right' }}>{r.skus.join(' , ')}</div>}</div> },
-            { key: 'scannedSale', title: 'مبيعات مسجّلة', render: v => <b>{v}</b> },
-            { key: 'amazonSale', title: 'مبيعات أمازون', render: v => <b>{v}</b> },
-            { key: 'saleDiff', title: 'الفرق', render: v => <Diff v={v} /> },
-            { key: 'scannedReturn', title: 'مرتجعات مسجّلة', render: v => v || '—' },
-            { key: 'amazonReturn', title: 'مرتجعات أمازون', render: v => v || '—' },
-            { key: 'returnDiff', title: 'الفرق', render: v => <Diff v={v} /> },
-            { key: 'status', title: 'الحالة', render: (v, r) => v === 'matched' ? <Badge color="#10b981">مطابق</Badge> : <Badge color="#ef4444">{explain(r)}</Badge> },
-          ]} data={m.rows.map(r => ({ ...r, _id: r.product }))} />
-        </Card>
+        {[
+          { key: 'sale', title: 'المبيعات', color: '#10b981', mine: 'scannedSale', amz: 'amazonSale', diff: 'saleDiff', label: 'Order' },
+          { key: 'return', title: 'المرتجعات', color: '#ef4444', mine: 'scannedReturn', amz: 'amazonReturn', diff: 'returnDiff', label: 'Refund' },
+        ].map(sec => {
+          const rows = m.rows.filter(r => r[sec.mine] || r[sec.amz]);
+          const bad = rows.filter(r => r[sec.diff] !== 0).length;
+          return (
+            <Card key={sec.key} style={{ padding: 0, marginBottom: 14, borderTop: `3px solid ${sec.color}` }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 14px', gap: 8, flexWrap: 'wrap' }}>
+                <b style={{ color: sec.color }}>{sec.title} <span style={{ fontSize: 11, color: C.muted, fontWeight: 400 }}>({sec.label} في تقرير أمازون)</span></b>
+                <span style={{ fontSize: 13, color: C.sub }}>
+                  مسجّل {rows.reduce((t, r) => t + r[sec.mine], 0)} / أمازون {rows.reduce((t, r) => t + r[sec.amz], 0)}
+                  {' '}{rows.length ? (bad ? <Badge color="#ef4444">فروقات في {bad} صنف</Badge> : <Badge color="#10b981">مطابقة</Badge>) : null}
+                </span>
+              </div>
+              {!rows.length ? <div style={{ padding: 18, textAlign: 'center', color: C.muted, fontSize: 13 }}>لا توجد {sec.title}</div> : (
+                <Table columns={[
+                  { key: 'name', title: 'الصنف', render: (v, r) => <div><div style={{ fontWeight: 700 }}>{v}</div>{r.skus.length > 0 && <div style={{ fontSize: 11, color: C.muted, fontFamily: 'monospace', direction: 'ltr', textAlign: 'right' }}>{r.skus.join(' , ')}</div>}</div> },
+                  { key: sec.mine, title: 'مسجّل', render: v => <b>{v}</b> },
+                  { key: sec.amz, title: 'أمازون', render: v => <b>{v}</b> },
+                  { key: sec.diff, title: 'الفرق', render: v => <Diff v={v} /> },
+                  { key: '_st', title: 'الحالة', render: (_, r) => r[sec.diff] === 0 ? <Badge color="#10b981">مطابق</Badge> : <Badge color="#ef4444">{r[sec.diff] > 0 ? `زيادة ${r[sec.diff]}` : `عجز ${-r[sec.diff]}`}</Badge> },
+                ]} data={rows.map(r => ({ ...r, _id: r.product + sec.key }))} />
+              )}
+            </Card>
+          );
+        })}
 
         {m.unmapped.length > 0 && (
           <Card style={{ padding: 0, borderColor: '#f59e0b66' }}>
@@ -390,14 +412,6 @@ function ShipmentMatch({ id, onBack }) {
 }
 
 const Diff = ({ v }) => <span style={{ fontWeight: 800, color: v === 0 ? C.muted : v > 0 ? '#f59e0b' : '#ef4444' }}>{v > 0 ? '+' + v : v || '0'}</span>;
-function explain(r) {
-  const out = [];
-  if (r.saleDiff > 0) out.push(`زيادة ${r.saleDiff} في المبيعات`);
-  if (r.saleDiff < 0) out.push(`عجز ${-r.saleDiff} في المبيعات`);
-  if (r.returnDiff > 0) out.push(`زيادة ${r.returnDiff} في المرتجعات`);
-  if (r.returnDiff < 0) out.push(`عجز ${-r.returnDiff} في المرتجعات`);
-  return out.join(' · ');
-}
 
 // ═══ الموظفين ══════════════════════════════════════════════════
 export function Employees() {
