@@ -265,6 +265,7 @@ function DataTab() {
   const [pv, setPv] = useState(null);
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState(null);
+  const [progress, setProgress] = useState(null);   // { done, total }
 
   const template = async () => {
     const XLSX = await import('xlsx');
@@ -287,10 +288,25 @@ function DataTab() {
   };
   const doImport = async () => {
     if (!confirm(`تسجيل ${pv.total} صنف؟\n(${pv.newCount} جديد، ${pv.total - pv.newCount} موجود هيتحدّث)`)) return;
+    // الملف بيترفع على دفعات صغيرة عشان الملفات الكبيرة ما تقفش في النص
     setBusy(true);
-    try { const { data } = await api.post('/admin/products/import', { rows }); setResult(data); setPv(null); toast.success(data.message); }
-    catch (e) { toast.error(err(e)); }
-    setBusy(false);
+    const head = rows.slice(0, pv.headerRow + 1), body = rows.slice(pv.headerRow + 1);
+    const SIZE = 200, sum = { created: 0, updated: 0, mapped: 0, errors: [] };
+    setProgress({ done: 0, total: body.length });
+    try {
+      for (let i = 0; i < body.length; i += SIZE) {
+        const { data } = await api.post('/admin/products/import', { rows: [...head, ...body.slice(i, i + SIZE)] });
+        sum.created += data.created; sum.updated += data.updated; sum.mapped += data.mapped;
+        sum.errors.push(...data.errors.map(e => ({ ...e, row: e.row + i })));
+        setProgress({ done: Math.min(i + SIZE, body.length), total: body.length });
+      }
+      const message = `✅ ${sum.created} صنف جديد، ${sum.updated} اتحدّث${sum.mapped ? `، ${sum.mapped} SKU أمازون اتربط` : ''}${sum.errors.length ? ` — ${sum.errors.length} سطر فيه مشكلة` : ''}`;
+      setResult({ ...sum, message }); setPv(null); toast.success(message);
+    } catch (e) {
+      toast.error(err(e) + ' — اللي اترفع لحد دلوقتي اتسجل، ارفع الملف تاني يكمّل من غير تكرار');
+      setResult({ ...sum, message: `⚠️ وقف بعد ${sum.created + sum.updated} صنف — ارفع نفس الملف تاني` });
+    }
+    setBusy(false); setProgress(null);
   };
 
   return (
@@ -336,6 +352,15 @@ function DataTab() {
         </Card>
       )}
 
+      {progress && (
+        <Card style={{ marginBottom: 14 }}>
+          <div style={{ fontWeight: 700, marginBottom: 8 }}>⏳ جاري التسجيل… {progress.done} من {progress.total} — ما تقفلش الصفحة</div>
+          <div style={{ height: 10, background: C.bg, borderRadius: 6, overflow: 'hidden' }}>
+            <div style={{ width: `${Math.round(progress.done / progress.total * 100)}%`, height: '100%', background: `linear-gradient(90deg,${C.accent},${C.accent2})`, transition: 'width .3s' }} />
+          </div>
+        </Card>
+      )}
+
       {result && (
         <Card style={{ marginBottom: 14, borderColor: result.errors.length ? '#f59e0b88' : '#10b98188' }}>
           <div style={{ fontWeight: 700, marginBottom: 6 }}>{result.message}</div>
@@ -343,7 +368,7 @@ function DataTab() {
         </Card>
       )}
 
-      {isSuper && <ResetCard />}
+      {isSuper && <ResetCard key={result?.message || ''} />}
     </div>
   );
 }

@@ -78,7 +78,7 @@ function readProducts(rows) {
       extraSkus: get(r, 'extraSkus').split(/[,،;|\n]+/).map(s => s.trim()).filter(Boolean),
     });
   });
-  return { items, columns: Object.keys(idx) };
+  return { items, columns: Object.keys(idx), headerRow };
 }
 
 // معاينة: إيه اللي اتفهم من الملف قبل ما يتسجل
@@ -89,7 +89,7 @@ router.post('/products/preview', auth, permit('products'), async (req, res) => {
   const key = (p) => [p.sku && 's:' + p.sku.toLowerCase(), p.barcode && 'b:' + p.barcode, 'n:' + p.name.trim().toLowerCase()].filter(Boolean);
   const known = new Set(existing.flatMap(key));
   const items = out.items.map(it => ({ ...it, exists: key(it).some(k => known.has(k)) }));
-  res.json({ columns: out.columns, items, total: items.length, newCount: items.filter(i => !i.exists).length });
+  res.json({ columns: out.columns, headerRow: out.headerRow, items, total: items.length, newCount: items.filter(i => !i.exists).length });
 });
 
 router.post('/products/import', auth, permit('products'), async (req, res) => {
@@ -106,12 +106,17 @@ router.post('/products/import', auth, permit('products'), async (req, res) => {
     let maxCode = lastCodes.reduce((m, p) => Math.max(m, parseInt(p.barcode.slice(3, 12))), 0);
     const newBarcode = () => { const d12 = '200' + String(++maxCode).padStart(9, '0'); return d12 + eanCheck(d12); };
 
-    let created = 0, updated = 0, mapped = 0;
-    const errors = [];
+    // كل الأصناف مرة واحدة في الذاكرة بدل بحث لكل سطر (الملفات ممكن تبقى آلاف الأصناف)
+    const all = await Product.find().lean();
+    const bySku = new Map(), byBarcode = new Map(), byName = new Map();
+    const index = (p) => { if (p.sku) bySku.set(p.sku, p); if (p.barcode) byBarcode.set(p.barcode, p); byName.set(p.name.trim(), p); };
+    all.forEach(index);
+
+    let created = 0, updated = 0;
+    const errors = [], ops = [], moves = [], mapOps = [], opRow = [];
     for (const it of out.items) {
       try {
-        let p = (it.sku && await Product.findOne({ sku: it.sku })) || (it.barcode && await Product.findOne({ barcode: it.barcode }))
-          || await Product.findOne({ name: it.name });
+        const p = (it.sku && bySku.get(it.sku)) || (it.barcode && byBarcode.get(it.barcode)) || byName.get(it.name);
         const data = { name: it.name };
         if (it.sku) data.sku = it.sku;
         if (it.asin) data.asin = it.asin;
@@ -123,18 +128,40 @@ router.post('/products/import', auth, permit('products'), async (req, res) => {
         if (it.category) data.category = await catId(it.category);
         if (it.supplier) data.supplier = await supId(it.supplier);
         const before = p ? p.stock : 0;
-        if (p) { Object.assign(p, data); updated++; }
-        else { p = new Product({ buyPrice: 0, sellPrice: 0, stock: 0, ...data }); if (!p.barcode) p.barcode = newBarcode(); created++; }
-        if (it.stock !== null) p.stock = it.stock;
-        await p.save();
-        if (it.stock !== null && it.stock !== before)
-          await StockMovement.create({ product: p._id, type: 'adjust', qty: Math.abs(it.stock - before), before, after: it.stock, reason: 'رصيد افتتاحي (استيراد)', reference: 'IMPORT', createdBy: req.user._id });
-        for (const sku of it.extraSkus) {
-          await AmazonSkuMap.findOneAndUpdate({ sku }, { sku, product: p._id }, { upsert: true });
-          mapped++;
+        if (it.stock !== null) data.stock = it.stock;
+        let id;
+        if (p) {
+          id = p._id;
+          ops.push({ updateOne: { filter: { _id: id }, update: { $set: data } } }); updated++;
+          Object.assign(p, data); index(p);
+        } else {
+          const doc = new Product({ buyPrice: 0, sellPrice: 0, stock: 0, ...data });
+          if (!doc.barcode) doc.barcode = newBarcode();
+          id = doc._id;
+          ops.push({ insertOne: { document: doc.toObject() } }); created++;
+          index(doc.toObject());
         }
-      } catch (e) { errors.push({ row: it.row, name: it.name, message: e.code === 11000 ? 'SKU أو باركود مكرر مع صنف تاني' : e.message }); }
+        opRow.push(it);
+        if (it.stock !== null && it.stock !== before)
+          moves.push({ product: id, type: 'adjust', qty: Math.abs(it.stock - before), before, after: it.stock, reason: 'رصيد افتتاحي (استيراد)', reference: 'IMPORT', createdBy: req.user._id });
+        for (const sku of it.extraSkus) mapOps.push({ updateOne: { filter: { sku }, update: { $set: { sku, product: id } }, upsert: true } });
+      } catch (e) { errors.push({ row: it.row, name: it.name, message: e.message }); }
     }
+    // التسجيل على دفعات — سطر فيه مشكلة ما يوقفش الباقي
+    for (let i = 0; i < ops.length; i += 500) {
+      try { await Product.bulkWrite(ops.slice(i, i + 500), { ordered: false }); }
+      catch (e) {
+        for (const we of e.writeErrors || []) {
+          const it = opRow[i + we.index];
+          if (ops[i + we.index].insertOne) created--; else updated--;
+          errors.push({ row: it?.row, name: it?.name, message: we.code === 11000 ? 'SKU أو باركود مكرر مع صنف تاني' : (we.errmsg || 'خطأ') });
+        }
+        if (!e.writeErrors) throw e;
+      }
+    }
+    for (let i = 0; i < moves.length; i += 1000) await StockMovement.insertMany(moves.slice(i, i + 1000));
+    let mapped = 0;
+    for (let i = 0; i < mapOps.length; i += 1000) { await AmazonSkuMap.bulkWrite(mapOps.slice(i, i + 1000), { ordered: false }); mapped += Math.min(1000, mapOps.length - i); }
     res.json({ message: `✅ ${created} صنف جديد، ${updated} اتحدّث${mapped ? `، ${mapped} SKU أمازون اتربط` : ''}${errors.length ? ` — ${errors.length} سطر فيه مشكلة` : ''}`, created, updated, mapped, errors });
   } catch (e) { res.status(500).json({ message: e.message }); }
 });
