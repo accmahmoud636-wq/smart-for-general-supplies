@@ -120,7 +120,7 @@ export default function Products() {
       <Card style={{ marginBottom: 16 }}>
         <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="🔍 بحث بالاسم، SKU، ASIN..."
-            style={{ flex: 1, minWidth: 200, background: '#0f172a', border: '1px solid #334155', borderRadius: 8, padding: '8px 12px', color: '#e2e8f0', fontSize: 14, outline: 'none' }} />
+            style={{ flex: 1, minWidth: 200, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 12px', color: '#e2e8f0', fontSize: 14, outline: 'none' }} />
           <Btn variant="ghost" onClick={() => setCam('search')}>📷</Btn>
           <div style={{ fontSize: 13, color: '#64748b' }}>{filtered.length} منتج</div>
           <div style={{ fontSize: 13, color: '#ef4444' }}>{filtered.filter(p => p.stock <= p.minStock).length} منخفض المخزون</div>
@@ -141,7 +141,7 @@ export default function Products() {
             <div style={{ flex: 1 }}><Input label="الباركود (سيبه فاضي = يتولد تلقائي، أو امسح باركود المصنع بالاسكانر)" value={form.barcode} onChange={v => setForm({...form,barcode:v})} placeholder="200000000001X" /></div>
             <div style={{ marginBottom: 14, display: 'flex', gap: 6 }}><Btn variant="ghost" onClick={() => setCam('form')}>📷</Btn><Btn variant="ghost" onClick={newBarcode}>🎲 توليد</Btn></div>
           </div>
-          <div style={{ gridColumn: '1/-1', marginBottom: 14, padding: 12, border: '1px dashed #334155', borderRadius: 10 }}>
+          <div style={{ gridColumn: '1/-1', marginBottom: 14, padding: 12, border: '1px dashed var(--border)', borderRadius: 10 }}>
             <label style={{ display: 'block', fontSize: 12, color: '#94a3b8', marginBottom: 6, fontWeight: 600 }}>🔗 SKUs أمازون للصنف ده (كل إعلان ليه SKU — ضيفهم كلهم هنا)</label>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
               {form.sku && <Badge color="#64748b">{form.sku} (SKU الصنف)</Badge>}
@@ -155,7 +155,7 @@ export default function Products() {
             </div>
             <div style={{ display: 'flex', gap: 6 }}>
               <input value={skuInput} onChange={e => setSkuInput(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addSku(); } }} placeholder="اكتب SKU الإعلان واضغط Enter"
-                style={{ flex: 1, background: '#0f172a', border: '1px solid #334155', borderRadius: 8, padding: '8px 12px', color: '#e2e8f0', fontSize: 13, outline: 'none', direction: 'ltr' }} />
+                style={{ flex: 1, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 12px', color: '#e2e8f0', fontSize: 13, outline: 'none', direction: 'ltr' }} />
               <Btn variant="ghost" onClick={addSku}>+ إضافة</Btn>
             </div>
           </div>
@@ -179,7 +179,7 @@ export default function Products() {
 
       {/* Adjust Stock Modal */}
       <Modal open={!!adjustModal} onClose={() => setAdjustModal(null)} title={`تسوية مخزون: ${adjustModal?.name}`} width={400}>
-        <div style={{ marginBottom: 12, padding: 12, background: '#0f172a', borderRadius: 8, fontSize: 13 }}>
+        <div style={{ marginBottom: 12, padding: 12, background: 'var(--bg)', borderRadius: 8, fontSize: 13 }}>
           <span style={{ color: '#64748b' }}>المخزون الحالي: </span>
           <span style={{ color: '#10b981', fontWeight: 700 }}>{adjustModal?.stock} {adjustModal?.unit}</span>
         </div>

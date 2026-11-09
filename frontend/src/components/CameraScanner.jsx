@@ -58,7 +58,7 @@ export default function CameraScanner({ open, onClose, onScan, continuous = fals
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px', color: '#fff' }}>
         <span style={{ fontWeight: 700, fontSize: 16 }}>📷 {title}</span>
         <div style={{ display: 'flex', gap: 8 }}>
-          <button onClick={toggleTorch} style={btn(torch ? '#f59e0b' : '#334155')}>🔦</button>
+          <button onClick={toggleTorch} style={btn(torch ? '#f59e0b' : 'var(--border)')}>🔦</button>
           <button onClick={close} style={btn('#ef4444')}>✕ قفل</button>
         </div>
       </div>

@@ -76,14 +76,14 @@ export function Purchases() {
           {lines.map((line,i)=>(
             <div key={i} style={{display:'flex',gap:8,marginBottom:8,alignItems:'center'}}>
               <select value={line.product} onChange={e=>updateLine(i,'product',e.target.value)}
-                style={{flex:2,background:'#0f172a',border:'1px solid #334155',borderRadius:8,padding:'8px 10px',color:'#e2e8f0',fontSize:13,outline:'none'}}>
+                style={{flex:2,background:'var(--bg)',border:'1px solid var(--border)',borderRadius:8,padding:'8px 10px',color:'#e2e8f0',fontSize:13,outline:'none'}}>
                 <option value="">-- المنتج --</option>
                 {products.map(p=><option key={p._id} value={p._id}>{p.name}</option>)}
               </select>
               <input type="number" value={line.qty} onChange={e=>updateLine(i,'qty',e.target.value)} placeholder="الكمية" min="1"
-                style={{width:70,background:'#0f172a',border:'1px solid #334155',borderRadius:8,padding:'8px 10px',color:'#e2e8f0',fontSize:13,outline:'none'}} />
+                style={{width:70,background:'var(--bg)',border:'1px solid var(--border)',borderRadius:8,padding:'8px 10px',color:'#e2e8f0',fontSize:13,outline:'none'}} />
               <input type="number" value={line.price} onChange={e=>updateLine(i,'price',e.target.value)} placeholder="السعر"
-                style={{width:90,background:'#0f172a',border:'1px solid #334155',borderRadius:8,padding:'8px 10px',color:'#e2e8f0',fontSize:13,outline:'none'}} />
+                style={{width:90,background:'var(--bg)',border:'1px solid var(--border)',borderRadius:8,padding:'8px 10px',color:'#e2e8f0',fontSize:13,outline:'none'}} />
               <span style={{minWidth:70,color:'#10b981',fontSize:12,fontWeight:700}}>{fmt(line.qty*line.price)} ر.س</span>
               {lines.length>1 && <button onClick={()=>removeLine(i)} style={{background:'none',border:'none',color:'#ef4444',cursor:'pointer',fontSize:16}}>×</button>}
             </div>
@@ -96,7 +96,7 @@ export function Purchases() {
           <Input label="شحن (ر.س)" type="number" value={form.shipping} onChange={v=>setForm({...form,shipping:v})} />
           <Input label="المدفوع (ر.س)" type="number" value={form.paid} onChange={v=>setForm({...form,paid:v})} />
         </div>
-        <div style={{background:'#0f172a',borderRadius:8,padding:12,marginBottom:14,display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+        <div style={{background:'var(--bg)',borderRadius:8,padding:12,marginBottom:14,display:'flex',justifyContent:'space-between',alignItems:'center'}}>
           <span style={{color:'#94a3b8',fontSize:13}}>الإجمالي النهائي</span>
           <span style={{color:'#10b981',fontWeight:800,fontSize:18}}>{fmt(total)} ر.س</span>
         </div>
@@ -172,14 +172,14 @@ export function Sales() {
           {lines.map((line,i)=>(
             <div key={i} style={{display:'flex',gap:8,marginBottom:8,alignItems:'center'}}>
               <select value={line.product} onChange={e=>updateLine(i,'product',e.target.value)}
-                style={{flex:2,background:'#0f172a',border:'1px solid #334155',borderRadius:8,padding:'8px 10px',color:'#e2e8f0',fontSize:13,outline:'none'}}>
+                style={{flex:2,background:'var(--bg)',border:'1px solid var(--border)',borderRadius:8,padding:'8px 10px',color:'#e2e8f0',fontSize:13,outline:'none'}}>
                 <option value="">-- المنتج --</option>
                 {products.map(p=><option key={p._id} value={p._id}>{p.name} (مخزون: {p.stock})</option>)}
               </select>
               <input type="number" value={line.qty} onChange={e=>updateLine(i,'qty',e.target.value)} placeholder="الكمية" min="1"
-                style={{width:70,background:'#0f172a',border:'1px solid #334155',borderRadius:8,padding:'8px 10px',color:'#e2e8f0',fontSize:13,outline:'none'}} />
+                style={{width:70,background:'var(--bg)',border:'1px solid var(--border)',borderRadius:8,padding:'8px 10px',color:'#e2e8f0',fontSize:13,outline:'none'}} />
               <input type="number" value={line.price} onChange={e=>updateLine(i,'price',e.target.value)} placeholder="السعر"
-                style={{width:90,background:'#0f172a',border:'1px solid #334155',borderRadius:8,padding:'8px 10px',color:'#e2e8f0',fontSize:13,outline:'none'}} />
+                style={{width:90,background:'var(--bg)',border:'1px solid var(--border)',borderRadius:8,padding:'8px 10px',color:'#e2e8f0',fontSize:13,outline:'none'}} />
               <span style={{minWidth:70,color:'#10b981',fontSize:12,fontWeight:700}}>{fmt(line.qty*line.price)} ر.س</span>
               {lines.length>1 && <button onClick={()=>removeLine(i)} style={{background:'none',border:'none',color:'#ef4444',cursor:'pointer',fontSize:16}}>×</button>}
             </div>
@@ -192,7 +192,7 @@ export function Sales() {
           <Input label="رسوم Amazon" type="number" value={form.amazonFees} onChange={v=>setForm({...form,amazonFees:v})} />
           <Input label="المدفوع" type="number" value={form.paid} onChange={v=>setForm({...form,paid:v})} />
         </div>
-        <div style={{background:'#0f172a',borderRadius:8,padding:12,marginBottom:14,display:'flex',justifyContent:'space-between'}}>
+        <div style={{background:'var(--bg)',borderRadius:8,padding:12,marginBottom:14,display:'flex',justifyContent:'space-between'}}>
           <span style={{color:'#94a3b8',fontSize:13}}>الإجمالي النهائي</span>
           <span style={{color:'#10b981',fontWeight:800,fontSize:18}}>{fmt(total)} ر.س</span>
         </div>

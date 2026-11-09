@@ -26,16 +26,15 @@ export default function Shipments() {
 
   return (
     <div>
-      {view.name === 'list' && <ShipmentList onNew={() => setView({ name: 'edit' })} onOpen={open} onEmployees={() => setView({ name: 'employees' })} />}
+      {view.name === 'list' && <ShipmentList onNew={() => setView({ name: 'edit' })} onOpen={open} />}
       {view.name === 'edit' && <ShipmentEditor id={view.id} onBack={() => setView({ name: 'list' })} onPosted={(id) => setView({ name: 'match', id })} />}
       {view.name === 'match' && <ShipmentMatch id={view.id} onBack={() => setView({ name: 'list' })} />}
-      {view.name === 'employees' && <Employees onBack={() => setView({ name: 'list' })} />}
     </div>
   );
 }
 
 // ═══ قائمة الشحنات ═══════════════════════════════════════════
-function ShipmentList({ onNew, onOpen, onEmployees }) {
+function ShipmentList({ onNew, onOpen }) {
   const [list, setList] = useState([]);
   const [filter, setFilter] = useState('');
   useEffect(() => { api.get('/shipments', { params: { status: filter } }).then(r => setList(r.data)).catch(e => toast.error(err(e))); }, [filter]);
@@ -44,7 +43,6 @@ function ShipmentList({ onNew, onOpen, onEmployees }) {
   return (
     <div>
       <PageHeader title="الشحنات والبضاعة المسلّمة" icon="📦" actions={[
-        <Btn key="emp" variant="ghost" onClick={onEmployees}>👤 الموظفين</Btn>,
         <Btn key="new" onClick={onNew}>+ شحنة جديدة</Btn>
       ]} />
       <Card style={{ marginBottom: 14, fontSize: 13, color: C.sub, lineHeight: 1.9 }}>
@@ -215,7 +213,7 @@ function ShipmentEditor({ id: initialId, onBack, onPosted }) {
         <div style={{ display: 'flex', gap: 8 }}>
           <input ref={ref} value={code} onChange={e => setCode(e.target.value)} onKeyDown={e => e.key === 'Enter' && onScan()} autoFocus
             placeholder={employee ? `امسح باركود الصنف (${TYPES[mode].label})` : 'امسح كارت الموظف'}
-            style={{ flex: 1, background: '#0f172a', border: `2px solid ${employee ? TYPES[mode].color : '#f59e0b'}`, borderRadius: 10, padding: '14px 16px', color: '#fff', fontSize: 20, outline: 'none', fontFamily: 'monospace', direction: 'ltr', textAlign: 'center' }} />
+            style={{ flex: 1, background: 'var(--bg)', border: `2px solid ${employee ? TYPES[mode].color : '#f59e0b'}`, borderRadius: 10, padding: '14px 16px', color: '#fff', fontSize: 20, outline: 'none', fontFamily: 'monospace', direction: 'ltr', textAlign: 'center' }} />
           <button onClick={() => setCam(true)} title="مسح بالكاميرا" style={{ flexShrink: 0, width: 64, background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', border: 'none', borderRadius: 10, fontSize: 26, cursor: 'pointer' }}>📷</button>
         </div>
         <CameraScanner open={cam} onClose={() => setCam(false)} onScan={onScan} message={flash} continuous title={employee ? `امسح كـ ${TYPES[mode].label}` : 'امسح كارت الموظف'} />
@@ -239,7 +237,7 @@ function ShipmentEditor({ id: initialId, onBack, onPosted }) {
               <option value="return">🔴 مرتجع</option>
             </select>
             <Btn size="sm" variant="ghost" onClick={() => setQty(i, it.qty - 1)}>−</Btn>
-            <input type="number" value={it.qty} onChange={e => setQty(i, +e.target.value)} style={{ width: 64, textAlign: 'center', background: '#1e293b', border: `1px solid ${C.border}`, borderRadius: 6, padding: 6, color: '#fff', fontSize: 16, fontWeight: 800 }} />
+            <input type="number" value={it.qty} onChange={e => setQty(i, +e.target.value)} style={{ width: 64, textAlign: 'center', background: 'var(--card)', border: `1px solid ${C.border}`, borderRadius: 6, padding: 6, color: '#fff', fontSize: 16, fontWeight: 800 }} />
             <Btn size="sm" variant="ghost" onClick={() => setQty(i, it.qty + 1)}>+</Btn>
             <Btn size="sm" variant="ghost" onClick={() => setQty(i, 0)}>🗑️</Btn>
           </div>
@@ -289,6 +287,7 @@ function ShipmentMatch({ id, onBack }) {
       setM(data);
       beep(data.result === 'matched');
       if (data.result === 'matched') toast.success('✅ كله مطابق');
+      if (data.imported) toast(`🛒 اتسجل في مركز أمازون: ${data.imported}`, { duration: 5000 });
     } catch (e) { beep(false); toast.error(err(e)); }
     setBusy(false);
   };
@@ -325,7 +324,7 @@ function ShipmentMatch({ id, onBack }) {
         <div style={{ fontWeight: 700, marginBottom: 6 }}>⬆️ ارفع ملف أمازون</div>
         <div style={{ fontSize: 12, color: C.sub, marginBottom: 12, lineHeight: 1.8 }}>
           تقرير المعاملات (Payments ← Date Range Reports ← Transaction) أو تقرير الطلبات (All Orders) — CSV أو TXT أو Excel.
-          الطلبات (Order) بتتقارن بالمبيعات، والمرتجعات (Refund) بتتقارن بالمرتجع.
+          الطلبات (Order) بتتقارن بالمبيعات، والمرتجعات (Refund) بتتقارن بالمرتجع. نفس الملف بيتسجل في مركز أمازون للربحية والتسويات.
         </div>
         <label style={{ display: 'block', border: `2px dashed ${C.border}`, borderRadius: 10, padding: 20, textAlign: 'center', cursor: 'pointer', color: C.sub }}>
           {busy ? '⏳ جاري المطابقة...' : m ? `📄 ${m.match.fileName} — اضغط لرفع ملف تاني` : '📁 اختار الملف'}
@@ -366,7 +365,7 @@ function ShipmentMatch({ id, onBack }) {
               { key: 'ret', title: '🔴', render: v => v || '—' },
               { key: 'sku', title: 'اربطه بـ', render: (v, r) => (
                 <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                  <select defaultValue="" onChange={e => mapSku(v, e.target.value)} style={{ background: '#0f172a', border: '1px solid #f59e0b55', borderRadius: 6, padding: '6px 8px', color: C.text, fontSize: 12, maxWidth: 200 }}>
+                  <select defaultValue="" onChange={e => mapSku(v, e.target.value)} style={{ background: 'var(--bg)', border: '1px solid #f59e0b55', borderRadius: 6, padding: '6px 8px', color: C.text, fontSize: 12, maxWidth: 200 }}>
                     <option value="">— اختار الصنف —</option>
                     {products.map(p => <option key={p._id} value={p._id}>{p.name}</option>)}
                   </select>
@@ -392,7 +391,9 @@ function explain(r) {
 }
 
 // ═══ الموظفين ══════════════════════════════════════════════════
-function Employees({ onBack }) {
+export function Employees() {
+  const { can } = useAuth();
+  const edit = can('settings');
   const [list, setList] = useState([]);
   const [name, setName] = useState('');
   const load = () => api.get('/shipments/employees').then(r => setList(r.data)).catch(e => toast.error(err(e)));
@@ -408,18 +409,17 @@ function Employees({ onBack }) {
 
   return (
     <div style={{ maxWidth: 760 }}>
-      <PageHeader title="الموظفين" icon="👤" actions={[
-        <Btn key="p" variant="ghost" onClick={() => printCards(list.filter(e => e.active))}>🖨️ طباعة كل الكروت</Btn>,
-        <Btn key="b" variant="ghost" onClick={onBack}>→ الشحنات</Btn>
-      ]} />
-      <Card style={{ marginBottom: 14 }}>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+        <Btn variant="ghost" onClick={() => printCards(list.filter(e => e.active))}>🖨️ طباعة كل الكروت</Btn>
+      </div>
+      {edit && <Card style={{ marginBottom: 14 }}>
         <div style={{ display: 'flex', gap: 8 }}>
           <input value={name} onChange={e => setName(e.target.value)} onKeyDown={e => e.key === 'Enter' && add()} placeholder="اسم الموظف"
-            style={{ flex: 1, background: '#0f172a', border: `1px solid ${C.border}`, borderRadius: 8, padding: '10px 12px', color: C.text, fontSize: 14, outline: 'none' }} />
+            style={{ flex: 1, background: 'var(--bg)', border: `1px solid ${C.border}`, borderRadius: 8, padding: '10px 12px', color: C.text, fontSize: 14, outline: 'none' }} />
           <Btn onClick={add}>+ إضافة</Btn>
         </div>
         <div style={{ fontSize: 12, color: C.muted, marginTop: 8 }}>كل موظف بياخد كود باركود (EMP0001 …) — اطبع الكارت والموظف يمسحه في أول كل شحنة.</div>
-      </Card>
+      </Card>}
       <Card style={{ padding: 0 }}>
         <Table columns={[
           { key: 'name', title: 'الاسم', render: (v, r) => <span style={{ fontWeight: 700, opacity: r.active ? 1 : 0.5 }}>{v}</span> },
@@ -427,7 +427,7 @@ function Employees({ onBack }) {
           { key: 'active', title: 'الحالة', render: v => <Badge color={v ? '#10b981' : '#64748b'}>{v ? 'شغال' : 'موقوف'}</Badge> },
           { key: '_id', title: '', render: (_, r) => <div style={{ display: 'flex', gap: 6 }}>
             <Btn size="sm" variant="ghost" onClick={() => printCards([r])}>🖨️ الكارت</Btn>
-            <Btn size="sm" variant="ghost" onClick={() => toggle(r)}>{r.active ? 'إيقاف' : 'تفعيل'}</Btn>
+            {edit && <Btn size="sm" variant="ghost" onClick={() => toggle(r)}>{r.active ? 'إيقاف' : 'تفعيل'}</Btn>}
           </div> },
         ]} data={list} />
       </Card>

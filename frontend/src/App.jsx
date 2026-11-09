@@ -6,20 +6,21 @@ import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Products from './pages/Products';
 import { Purchases, Sales } from './pages/Invoices';
-import { Categories, Suppliers, Customers, Expenses, StockPage, Users, Reports } from './pages/OtherPages';
+import { Categories, Suppliers, Customers, Expenses, StockPage, Reports } from './pages/OtherPages';
+import Settings from './pages/Settings';
 import AmazonHub from './pages/AmazonHub';
 import Shipments from './pages/Shipments';
 
 function PrivateRoute({ children }) {
   const { user, loading } = useAuth();
-  if (loading) return <div style={{ minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',background:'#0f172a',color:'#6366f1',fontSize:20 }}>⏳ جاري التحميل...</div>;
+  if (loading) return <div style={{ minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',background:'var(--bg)',color:'#6366f1',fontSize:20 }}>⏳ جاري التحميل...</div>;
   if (!user) return <Navigate to="/login" />;
   return <Layout>{children}</Layout>;
 }
 
 function AppRoutes() {
   const { user, loading } = useAuth();
-  if (loading) return <div style={{ minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',background:'#0f172a',color:'#6366f1',fontSize:20 }}>⏳</div>;
+  if (loading) return <div style={{ minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',background:'var(--bg)',color:'#6366f1',fontSize:20 }}>⏳</div>;
   return (
     <Routes>
       <Route path="/login"      element={user ? <Navigate to="/" /> : <Login />} />
@@ -36,7 +37,9 @@ function AppRoutes() {
       <Route path="/expenses"   element={<PrivateRoute><Expenses /></PrivateRoute>} />
       <Route path="/stock"      element={<PrivateRoute><StockPage /></PrivateRoute>} />
       <Route path="/reports"    element={<PrivateRoute><Reports /></PrivateRoute>} />
-      <Route path="/users"      element={<PrivateRoute><Users /></PrivateRoute>} />
+      <Route path="/reports/inventory" element={<PrivateRoute><Reports /></PrivateRoute>} />
+      <Route path="/settings"   element={<PrivateRoute><Settings /></PrivateRoute>} />
+      <Route path="/users"      element={<Navigate to="/settings?tab=users" />} />
       <Route path="*"           element={<Navigate to="/" />} />
     </Routes>
   );
@@ -45,7 +48,7 @@ function AppRoutes() {
 export default function App() {
   return (
     <AuthProvider>
-      <Toaster position="top-center" toastOptions={{ style:{ background:'#1e293b',color:'#e2e8f0',border:'1px solid #334155' } }} />
+      <Toaster position="top-center" toastOptions={{ style:{ background:'var(--card)',color:'#e2e8f0',border:'1px solid var(--border)' } }} />
       <AppRoutes />
     </AuthProvider>
   );

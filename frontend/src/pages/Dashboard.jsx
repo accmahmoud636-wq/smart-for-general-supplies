@@ -49,10 +49,10 @@ export default function Dashboard() {
                   <stop offset="95%" stopColor="#6366f1" stopOpacity={0}/>
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
               <XAxis dataKey="month" tick={{ fill: '#64748b', fontSize: 11 }} />
               <YAxis tick={{ fill: '#64748b', fontSize: 11 }} />
-              <Tooltip contentStyle={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8, color: '#e2e8f0' }} />
+              <Tooltip contentStyle={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 8, color: '#e2e8f0' }} />
               <Area type="monotone" dataKey="revenue" stroke="#6366f1" fill="url(#rev)" strokeWidth={2} name="الإيرادات" />
             </AreaChart>
           </ResponsiveContainer>
@@ -63,10 +63,10 @@ export default function Dashboard() {
           <div style={{ fontWeight: 700, marginBottom: 16, fontSize: 14 }}>💸 المصروفات آخر 6 أشهر</div>
           <ResponsiveContainer width="100%" height={220}>
             <BarChart data={data.chartData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
               <XAxis dataKey="month" tick={{ fill: '#64748b', fontSize: 11 }} />
               <YAxis tick={{ fill: '#64748b', fontSize: 11 }} />
-              <Tooltip contentStyle={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8, color: '#e2e8f0' }} />
+              <Tooltip contentStyle={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 8, color: '#e2e8f0' }} />
               <Bar dataKey="expenses" fill="#f59e0b" radius={[4,4,0,0]} name="المصروفات" />
             </BarChart>
           </ResponsiveContainer>

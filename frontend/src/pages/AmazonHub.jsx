@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import api from '../utils/api';
-import { readReportFile } from '../utils/parseReport';
 import { Card, Btn, Badge, Input, Table, PageHeader, StatCard, fmt, fmtDate, C_THEME as C } from '../components/UI';
 import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
@@ -38,8 +38,6 @@ const LEVELS = {
 const TABS = [
   ['overview', '📊 نظرة عامة'],
   ['orders', '📦 الطلبات'],
-  ['upload', '⬆️ رفع التقارير'],
-  ['dispatch', '⚖️ مطابقة الخروج'],
   ['profit', '💰 ربحية المنتجات'],
   ['recon', '🧾 التسويات'],
   ['reorder', '🔄 إعادة الطلب'],
@@ -75,7 +73,9 @@ const Chip = ({ active, onClick, color, children }) => (
 export default function AmazonHub() {
   const { can } = useAuth();
   const canEdit = can('amazon');
-  const [tab, setTab] = useState('overview');
+  const [sp, setSp] = useSearchParams();
+  const tab = sp.get('tab') || 'overview';
+  const setTab = (t) => setSp({ tab: t });
   const [summary, setSummary] = useState(null);
   const loadSummary = () => api.get('/amazon/summary').then(r => setSummary(r.data)).catch(() => {});
   useEffect(() => { loadSummary(); }, []);
@@ -100,8 +100,6 @@ export default function AmazonHub() {
 
       {tab === 'overview' && <OverviewTab go={setTab} />}
       {tab === 'orders' && <OrdersTab canEdit={canEdit} onChange={loadSummary} />}
-      {tab === 'upload' && <UploadTab canEdit={canEdit} onDone={loadSummary} goSkus={() => setTab('skus')} />}
-      {tab === 'dispatch' && <DispatchTab />}
       {tab === 'profit' && <ProfitTab />}
       {tab === 'recon' && <ReconTab />}
       {tab === 'reorder' && <ReorderTab />}
@@ -195,68 +193,6 @@ function OrdersTab({ canEdit, onChange }) {
   );
 }
 
-// ═══ رفع التقارير ════════════════════════════════════════════
-function UploadTab({ canEdit, onDone, goSkus }) {
-  const [busy, setBusy] = useState('');
-  const [log, setLog] = useState([]);
-
-  const upload = async (kind, file) => {
-    if (!file) return;
-    setBusy(kind);
-    try {
-      const rows = await readReportFile(file);
-      if (rows.length < 2) throw new Error('الملف فاضي');
-      const r = await api.post(`/amazon/upload/${kind}`, { rows });
-      toast.success(r.data.message);
-      setLog(l => [{ ok: true, file: file.name, msg: r.data.message }, ...l]);
-      onDone();
-    } catch (e) {
-      const d = e.response?.data;
-      const msg = d?.message || e.message;
-      toast.error(msg);
-      setLog(l => [{ ok: false, file: file.name, msg, headers: d?.headers }, ...l]);
-    }
-    setBusy('');
-  };
-
-  if (!canEdit) return <Card>ليس لديك صلاحية رفع التقارير</Card>;
-
-  const Box = ({ kind, title, icon, how }) => (
-    <Card>
-      <div style={{ fontSize: 28, marginBottom: 6 }}>{icon}</div>
-      <div style={{ fontWeight: 800, fontSize: 16, marginBottom: 6 }}>{title}</div>
-      <div style={{ fontSize: 12, color: C.sub, lineHeight: 1.9, marginBottom: 14 }}>{how}</div>
-      <label style={{ display: 'block', border: `2px dashed ${C.border}`, borderRadius: 10, padding: 22, textAlign: 'center', cursor: 'pointer', color: C.sub }}>
-        {busy === kind ? '⏳ جاري الرفع...' : '📁 اختار ملف Excel أو CSV أو TXT'}
-        <input type="file" accept=".csv,.txt,.tsv,.xlsx,.xls" style={{ display: 'none' }} disabled={!!busy} onChange={e => { upload(kind, e.target.files[0]); e.target.value = ''; }} />
-      </label>
-    </Card>
-  );
-
-  return (
-    <div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(300px,1fr))', gap: 14, marginBottom: 14 }}>
-        <Box kind="orders" icon="📦" title="تقرير الطلبات"
-          how={<>Seller Central ← Reports ← Fulfillment ← <b>All Orders</b> (Order Date) ← Download.<br />ينزل ملف TXT — ارفعه زي ما هو. إعادة رفع نفس الطلب بتحدّثه بدون تكرار.</>} />
-        <Box kind="transactions" icon="💳" title="تقرير المعاملات (التسوية)"
-          how={<>Seller Central ← Reports ← Payments ← <b>Date Range Reports</b> ← Transaction ← Generate ← CSV.<br />فيه المبيعات والرسوم وصافي المدفوع لكل طلب. التكرار بيتشال تلقائياً.</>} />
-      </div>
-      <Card style={{ marginBottom: 14 }}>
-        <div style={{ fontSize: 13, color: C.sub }}>
-          💡 بعد الرفع راجع تبويب <a onClick={goSkus} style={{ color: '#818cf8', cursor: 'pointer' }}>ربط SKU</a> — أي SKU مش مربوط بمنتج مش هيتحسب له تكلفة ولا هيتخصم من المخزون.
-        </div>
-      </Card>
-      {log.map((l, i) => (
-        <Card key={i} style={{ marginBottom: 8, borderColor: l.ok ? '#10b98155' : '#ef444455' }}>
-          <div style={{ fontWeight: 600, color: l.ok ? '#10b981' : '#f87171' }}>{l.ok ? '✅' : '❌'} {l.file}</div>
-          <div style={{ fontSize: 13, color: C.sub, marginTop: 4 }}>{l.msg}</div>
-          {l.headers && <div style={{ fontSize: 11, color: C.muted, marginTop: 6, direction: 'ltr', textAlign: 'left' }}>الأعمدة الموجودة: {l.headers.join(' | ')}</div>}
-        </Card>
-      ))}
-    </div>
-  );
-}
-
 // ═══ الربحية ═════════════════════════════════════════════════
 function ProfitTab() {
   const [range, setRange] = useState({ from: '', to: '' });
@@ -346,7 +282,7 @@ function ReconTab() {
       </>}
       {view === 'settlements' && <Card style={{ padding: 0 }}><Table columns={setCols} data={settlements.map(s => ({ ...s, _id: s.settlementId }))} /></Card>}
       {view === 'missing' && <Card style={{ padding: 0 }}>
-        <div style={{ padding: 14, fontSize: 13, color: C.sub }}>طلبات ظهرت في التسوية ومش موجودة في تقرير الطلبات — ارفع تقرير طلبات يغطي الفترة دي.</div>
+        <div style={{ padding: 14, fontSize: 13, color: C.sub }}>طلبات ظهرت في المعاملات ومش موجودة في تقرير الطلبات.</div>
         <Table columns={[{ key: 'orderId', title: 'رقم الطلب' }, { key: 'date', title: 'التاريخ', render: v => fmtDate(v) }, { key: 'net', title: 'الصافي', render: money }]} data={data.missingOrders.map(m => ({ ...m, _id: m.orderId }))} />
       </Card>}
     </div>
@@ -417,7 +353,7 @@ function SkusTab({ canEdit }) {
     { key: 'product', title: 'المنتج في النظام', render: (v, r) => v
       ? <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}><Badge color="#10b981">{v.name}</Badge>{r.manual && canEdit && <Btn size="sm" variant="ghost" onClick={() => unmap(r.sku)}>فك</Btn>}</div>
       : canEdit
-        ? <select defaultValue="" onChange={e => map(r.sku, e.target.value)} style={{ background: '#0f172a', border: '1px solid #f8717155', borderRadius: 6, padding: '6px 8px', color: C.text, fontSize: 12, maxWidth: 240 }}>
+        ? <select defaultValue="" onChange={e => map(r.sku, e.target.value)} style={{ background: 'var(--bg)', border: '1px solid #f8717155', borderRadius: 6, padding: '6px 8px', color: C.text, fontSize: 12, maxWidth: 240 }}>
             <option value="">— اختار المنتج —</option>
             {products.map(p => <option key={p._id} value={p._id}>{p.name}{p.sku ? ` (${p.sku})` : ''}</option>)}
           </select>
@@ -522,48 +458,3 @@ function OverviewTab({ go }) {
   );
 }
 
-// ═══ مطابقة الخروج مع الطلبات ════════════════════════════════
-const DSTAT = {
-  matched: { label: 'مطابق', color: '#10b981' },
-  short:   { label: 'مطلوب أكتر من اللي خرج', color: '#ef4444' },
-  over:    { label: 'خرج أكتر من المطلوب', color: '#f59e0b' },
-};
-function DispatchTab() {
-  const d0 = new Date(Date.now() - 6 * 864e5).toISOString().slice(0, 10);
-  const [range, setRange] = useState({ from: d0, to: new Date().toISOString().slice(0, 10) });
-  const [data, setData] = useState(null);
-  const [st, setSt] = useState('');
-  useEffect(() => { api.get('/amazon/dispatch-compare', { params: range }).then(r => setData(r.data)).catch(() => toast.error('خطأ')); }, [range.from, range.to]);
-  if (!data) return <div style={{ textAlign: 'center', padding: 40, color: C.muted }}>⏳</div>;
-  const t = data.totals;
-  const rows = data.rows.filter(r => !st || r.status === st);
-  const counts = { matched: t.matched, short: t.short, over: t.over };
-
-  return (
-    <div>
-      <Card style={{ marginBottom: 14, fontSize: 13, color: C.sub, lineHeight: 1.9 }}>
-        بيقارن القطع اللي خرجت من شاشة <b>«📦 الشحنات والتسليم»</b> (المبيعات المرحّلة) مع الكميات المطلوبة في <b>تقرير الطلبات</b> لنفس الفترة (بتاريخ الطلب).
-        الطلبات الملغية مش محسوبة. لو بتشحن طلبات آخر اليوم تاني يوم، وسّع الفترة يوم.
-      </Card>
-      <DateFilter value={range} onChange={setRange} />
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(170px,1fr))', gap: 12, marginBottom: 14 }}>
-        <StatCard label="قطع مطلوبة في الطلبات" value={t.ordered} icon="🧾" color="#3b82f6" sub={`${t.orders} طلب`} />
-        <StatCard label="قطع خرجت بالاسكانر" value={t.dispatched} icon="🚚" color="#8b5cf6" />
-        <StatCard label="الفرق" value={t.dispatched - t.ordered} icon="⚖️" color={t.dispatched === t.ordered ? '#10b981' : '#ef4444'} sub={t.dispatched === t.ordered ? 'كله مطابق 👌' : t.dispatched > t.ordered ? 'خرج زيادة' : 'خرج ناقص'} />
-      </div>
-      {data.unmapped.length > 0 && <Card style={{ marginBottom: 14, borderColor: '#f59e0b55', color: '#f59e0b', fontSize: 13 }}>⚠️ SKUs في الطلبات مش مربوطة بصنف — مش داخلة في المقارنة: {data.unmapped.map(u => `${u.sku} (${u.qty})`).join('، ')} — اربطها من تبويب «ربط SKU»</Card>}
-      <Chips items={DSTAT} value={st} onChange={setSt} counts={counts} />
-      <Card style={{ padding: 0 }}>
-        <Table columns={[
-          { key: 'name', title: 'الصنف', render: (v, r) => <div><div style={{ fontWeight: 600 }}>{v}</div><div style={{ fontSize: 11, color: C.muted }}>{r.skus.join('، ')}</div></div> },
-          { key: 'ordered', title: 'مطلوب' },
-          { key: 'dispatched', title: 'خرج' },
-          { key: 'diff', title: 'الفرق', render: v => <span style={{ fontWeight: 800, fontSize: 15, color: v === 0 ? '#10b981' : v > 0 ? '#f59e0b' : '#ef4444' }}>{v > 0 ? '+' + v : v}</span> },
-          { key: 'stock', title: 'المخزون الحالي', render: v => v ?? '—' },
-          { key: 'orderIds', title: 'الطلبات', render: v => <span style={{ fontSize: 11, color: C.sub }}>{v.length ? `${v.length} طلب` : '—'}</span> },
-          { key: 'status', title: 'الحالة', render: v => <Badge color={DSTAT[v].color}>{DSTAT[v].label}</Badge> },
-        ]} data={rows} />
-      </Card>
-    </div>
-  );
-}

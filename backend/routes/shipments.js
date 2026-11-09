@@ -10,7 +10,8 @@ const amazon = require('./amazon');
 const { buildResolver } = amazon;
 const { mapHeaders, num, parseDate, kindFromType, stageFromAmazon, ORDER_ALIASES, TX_ALIASES } = amazon._test;
 
-const CAN = permit('stock', 'amazon');
+const CAN = permit('shipments');
+const READ = permit('shipments:read');
 const SALE_REASON = 'خروج لأمازون';      // نفس السبب اللي بيقرأه تبويب «مطابقة الخروج» في مركز أمازون
 const RETURN_REASON = 'مرتجع أمازون';
 
@@ -19,7 +20,7 @@ router.get('/employees', auth, async (req, res) => {
   res.json(await Employee.find().sort('name').lean());
 });
 
-router.post('/employees', auth, CAN, async (req, res) => {
+router.post('/employees', auth, permit('settings'), async (req, res) => {
   try {
     const name = String(req.body.name || '').trim();
     if (!name) return res.status(400).json({ message: 'اسم الموظف مطلوب' });
@@ -29,7 +30,7 @@ router.post('/employees', auth, CAN, async (req, res) => {
   } catch (e) { res.status(400).json({ message: e.message }); }
 });
 
-router.put('/employees/:id', auth, CAN, async (req, res) => {
+router.put('/employees/:id', auth, permit('settings'), async (req, res) => {
   const { name, active } = req.body;
   const upd = {};
   if (name !== undefined) upd.name = String(name).trim();
@@ -44,14 +45,14 @@ const totals = (items) => ({
   lines: items.length
 });
 
-router.get('/', auth, CAN, async (req, res) => {
+router.get('/', auth, READ, async (req, res) => {
   const q = {};
   if (req.query.status) q.status = req.query.status;
   const list = await Shipment.find(q).populate('employee', 'name code').sort('-createdAt').limit(300).lean();
   res.json(list.map(s => ({ ...s, ...totals(s.items), items: undefined, match: s.match?.fileName ? { fileName: s.match.fileName, result: s.match.result, uploadedAt: s.match.uploadedAt } : null })));
 });
 
-router.get('/:id', auth, CAN, async (req, res) => {
+router.get('/:id', auth, READ, async (req, res) => {
   const s = await Shipment.findById(req.params.id).populate('employee', 'name code').populate('items.product', 'name stock barcode').lean();
   if (!s) return res.status(404).json({ message: 'الشحنة مش موجودة' });
   res.json(s);
@@ -220,16 +221,19 @@ router.post('/:id/match', auth, CAN, async (req, res) => {
     if (s.status !== 'posted') return res.status(400).json({ message: 'رحّل الشحنة الأول وبعدين طابقها' });
     const file = readAmazonFile(req.body.rows || []);
     if (!file) return res.status(400).json({ message: 'مش قادر أقرأ الملف — ارفع تقرير المعاملات أو تقرير الطلبات من أمازون', headers: (req.body.rows?.[0] || []).slice(0, 30) });
+    // نفس الملف بيتسجل كمان في مركز أمازون (الطلبات/المعاملات) عشان الربحية والتسويات — من غير تكرار
+    const rows = req.body.rows || [];
+    const imported = file.fileType === 'transactions' ? await amazon.importTransactions(rows) : await amazon.importOrders(rows);
     s.match = { fileName: req.body.fileName || '', fileType: file.fileType, uploadedAt: new Date(), from: file.from, to: file.to, amazon: file.amazon, result: null };
     const m = await computeMatch(s);
     s.match.result = m.result;
     await s.save();
-    res.json({ ...m, match: { fileName: s.match.fileName, fileType: s.match.fileType, from: s.match.from, to: s.match.to, uploadedAt: s.match.uploadedAt } });
+    res.json({ ...m, imported: imported?.message, match: { fileName: s.match.fileName, fileType: s.match.fileType, from: s.match.from, to: s.match.to, uploadedAt: s.match.uploadedAt } });
   } catch (e) { res.status(500).json({ message: e.message }); }
 });
 
 // إعادة حساب المطابقة (بعد ربط SKU مثلاً) من غير رفع الملف تاني
-router.get('/:id/match', auth, CAN, async (req, res) => {
+router.get('/:id/match', auth, READ, async (req, res) => {
   try {
     const s = await Shipment.findById(req.params.id).populate('items.product', 'name');
     if (!s) return res.status(404).json({ message: 'الشحنة مش موجودة' });

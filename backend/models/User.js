@@ -1,6 +1,22 @@
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 
+// كل الصلاحيات المتاحة — كل واحدة ليها مستويين: x:read = عرض بس، x = عرض وتعديل
+const PERMISSIONS = [
+  { key: 'shipments',  label: 'الشحنات والتسليم',      group: 'العمليات' },
+  { key: 'amazon',     label: 'مركز أمازون',           group: 'أمازون' },
+  { key: 'products',   label: 'المنتجات وربط SKU',     group: 'المخزون' },
+  { key: 'categories', label: 'الفئات',                group: 'المخزون' },
+  { key: 'stock',      label: 'حركة المخزون والتسويات', group: 'المخزون' },
+  { key: 'purchases',  label: 'فواتير الشراء',          group: 'المخزون' },
+  { key: 'suppliers',  label: 'الموردين',               group: 'المخزون' },
+  { key: 'sales',      label: 'فواتير البيع',           group: 'الحسابات' },
+  { key: 'customers',  label: 'العملاء',               group: 'الحسابات' },
+  { key: 'expenses',   label: 'المصروفات',             group: 'الحسابات' },
+  { key: 'reports',    label: 'التقارير',              group: 'الحسابات' },
+  { key: 'settings',   label: 'الإعدادات (الموظفين والمظهر)', group: 'الإعدادات' },
+];
+
 const ROLES = {
   superadmin: {
     label: 'مدير النظام',
@@ -8,15 +24,15 @@ const ROLES = {
   },
   admin: {
     label: 'مدير',
-    permissions: ['products','categories','suppliers','customers','purchases','sales','expenses','stock','reports','amazon']
+    permissions: ['products','categories','suppliers','customers','purchases','sales','expenses','stock','reports','amazon','shipments','settings']
   },
   accountant: {
     label: 'محاسب',
-    permissions: ['purchases','sales','expenses','reports','products:read','suppliers:read','customers:read','amazon']
+    permissions: ['purchases','sales','expenses','reports','products:read','suppliers:read','customers:read','amazon','shipments:read','stock:read']
   },
   inventory: {
     label: 'مسؤول مخزون',
-    permissions: ['products','categories','suppliers','stock','purchases','reports:inventory','amazon']
+    permissions: ['products','categories','suppliers','stock','purchases','reports:read','amazon','shipments']
   },
   sales: {
     label: 'مبيعات',
@@ -24,7 +40,7 @@ const ROLES = {
   },
   viewer: {
     label: 'مشاهد',
-    permissions: ['products:read','sales:read','purchases:read','expenses:read','reports','amazon:read']
+    permissions: ['products:read','sales:read','purchases:read','expenses:read','reports:read','amazon:read','shipments:read','stock:read']
   }
 };
 
@@ -35,7 +51,10 @@ const userSchema = new mongoose.Schema({
   role:     { type: String, enum: Object.keys(ROLES), default: 'viewer' },
   active:   { type: Boolean, default: true },
   avatar:   { type: String, default: '' },
-  lastLogin:{ type: Date }
+  lastLogin:{ type: Date },
+  // صلاحيات مخصصة: لو مفعّلة بتحل محل صلاحيات الدور
+  useCustom:         { type: Boolean, default: false },
+  customPermissions: { type: [String], default: [] }
 }, { timestamps: true });
 
 userSchema.pre('save', async function(next) {
@@ -48,8 +67,13 @@ userSchema.methods.comparePassword = function(pw) {
   return bcrypt.compare(pw, this.password);
 };
 
+userSchema.methods.effectivePermissions = function() {
+  if (this.role === 'superadmin') return ['all'];
+  return this.useCustom ? (this.customPermissions || []) : (ROLES[this.role]?.permissions || []);
+};
+
 userSchema.methods.hasPermission = function(perm) {
-  const rolePerms = ROLES[this.role]?.permissions || [];
+  const rolePerms = this.effectivePermissions();
   if (rolePerms.includes('all')) return true;
   if (rolePerms.includes(perm)) return true;
   // Check base permission (e.g. 'products' covers 'products:read')
@@ -61,8 +85,10 @@ userSchema.methods.toSafeObject = function() {
   const obj = this.toObject();
   delete obj.password;
   obj.roleLabel = ROLES[this.role]?.label;
+  obj.permissions = this.effectivePermissions();
   return obj;
 };
 
 module.exports = mongoose.model('User', userSchema);
 module.exports.ROLES = ROLES;
+module.exports.PERMISSIONS = PERMISSIONS;

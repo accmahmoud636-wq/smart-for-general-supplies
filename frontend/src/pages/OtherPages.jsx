@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import api from '../utils/api';
 import { Card, Btn, Badge, Input, Select, Modal, Table, PageHeader, StatCard, fmt, fmtDate, C_THEME as C } from '../components/UI';
 import toast from 'react-hot-toast';
@@ -222,6 +223,7 @@ export function Users() {
 // REPORTS
 // ═══════════════════════════════════════════════════════════
 export function Reports() {
+  const kind = useLocation().pathname.endsWith('/inventory') ? 'inventory' : 'finance';
   const [from, setFrom] = useState(''); const [to, setTo] = useState('');
   const [pl, setPL] = useState(null); const [inv, setInv] = useState(null); const [loading, setLoading] = useState(false);
   const load = async () => {
@@ -235,17 +237,17 @@ export function Reports() {
   useEffect(()=>{ load(); },[]);
   return (
     <div>
-      <PageHeader title="التقارير المالية" icon="📈" />
+      <PageHeader title={kind === 'inventory' ? 'تقارير المخزون' : 'التقارير المالية'} icon={kind === 'inventory' ? '📦' : '📈'} />
       <Card style={{marginBottom:16}}>
         <div style={{display:'flex',gap:12,alignItems:'flex-end',flexWrap:'wrap'}}>
-          <div><label style={{fontSize:12,color:'#94a3b8',display:'block',marginBottom:5,fontWeight:600}}>من تاريخ</label><input type="date" value={from} onChange={e=>setFrom(e.target.value)} style={{background:'#0f172a',border:'1px solid #334155',borderRadius:8,padding:'8px 12px',color:'#e2e8f0',fontSize:14,outline:'none'}} /></div>
-          <div><label style={{fontSize:12,color:'#94a3b8',display:'block',marginBottom:5,fontWeight:600}}>إلى تاريخ</label><input type="date" value={to} onChange={e=>setTo(e.target.value)} style={{background:'#0f172a',border:'1px solid #334155',borderRadius:8,padding:'8px 12px',color:'#e2e8f0',fontSize:14,outline:'none'}} /></div>
+          <div><label style={{fontSize:12,color:'#94a3b8',display:'block',marginBottom:5,fontWeight:600}}>من تاريخ</label><input type="date" value={from} onChange={e=>setFrom(e.target.value)} style={{background:'var(--bg)',border:'1px solid var(--border)',borderRadius:8,padding:'8px 12px',color:'#e2e8f0',fontSize:14,outline:'none'}} /></div>
+          <div><label style={{fontSize:12,color:'#94a3b8',display:'block',marginBottom:5,fontWeight:600}}>إلى تاريخ</label><input type="date" value={to} onChange={e=>setTo(e.target.value)} style={{background:'var(--bg)',border:'1px solid var(--border)',borderRadius:8,padding:'8px 12px',color:'#e2e8f0',fontSize:14,outline:'none'}} /></div>
           <Btn onClick={load} disabled={loading}>🔍 عرض</Btn>
         </div>
       </Card>
       {pl && (
-        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16,marginBottom:16}}>
-          <Card>
+        <div style={{display:'grid',gridTemplateColumns:'1fr',gap:16,marginBottom:16,maxWidth:760}}>
+          {kind === 'finance' && <Card>
             <div style={{fontWeight:700,marginBottom:16,fontSize:15}}>📊 قائمة الدخل (P&L)</div>
             {[
               {label:'الإيرادات الإجمالية',val:pl.revenue,color:'#10b981'},
@@ -255,27 +257,27 @@ export function Reports() {
               {label:'المصروفات التشغيلية',val:-pl.totalExpenses,color:'#ef4444'},
               {label:'صافي الربح',val:pl.netProfit,color:pl.netProfit>=0?'#10b981':'#ef4444',bold:true,border:true},
             ].map(r=>(
-              <div key={r.label} style={{display:'flex',justifyContent:'space-between',padding:'9px 0',borderTop:r.border?'2px solid #334155':'1px solid #334155',marginTop:r.border?6:0}}>
+              <div key={r.label} style={{display:'flex',justifyContent:'space-between',padding:'9px 0',borderTop:r.border?'2px solid var(--border)':'1px solid var(--border)',marginTop:r.border?6:0}}>
                 <span style={{fontSize:13,color:'#94a3b8'}}>{r.label}</span>
                 <span style={{fontSize:13,color:r.color,fontWeight:r.bold?800:600}}>{r.val>=0?'+':''}{fmt(r.val)} ر.س</span>
               </div>
             ))}
-          </Card>
-          <Card>
+          </Card>}
+          {kind === 'inventory' && <Card>
             <div style={{fontWeight:700,marginBottom:16,fontSize:15}}>📦 ملخص المخزون</div>
             {inv && <>
               <StatCard label="قيمة المخزون الكلية" value={`${fmt(inv.totalValue)} ر.س`} icon="💰" color="#3b82f6" />
               <div style={{marginTop:12}}><StatCard label="منتجات منخفضة المخزون" value={inv.lowStockCount} icon="⚠️" color="#ef4444" /></div>
-              <div style={{marginTop:12,maxHeight:200,overflowY:'auto'}}>
+              <div style={{marginTop:12,maxHeight:420,overflowY:'auto'}}>
                 {inv.products?.filter(p=>p.lowStock).map(p=>(
-                  <div key={p._id} style={{display:'flex',justifyContent:'space-between',padding:'6px 0',borderBottom:'1px solid #334155',fontSize:12}}>
+                  <div key={p._id} style={{display:'flex',justifyContent:'space-between',padding:'6px 0',borderBottom:'1px solid var(--border)',fontSize:12}}>
                     <span style={{color:'#e2e8f0'}}>{p.name}</span>
                     <span style={{color:'#ef4444',fontWeight:700}}>{p.stock} متبقي (حد: {p.minStock})</span>
                   </div>
                 ))}
               </div>
             </>}
-          </Card>
+          </Card>}
         </div>
       )}
     </div>

@@ -29,7 +29,7 @@ export default function LabelModal({ open, onClose, products = [], initial = {} 
     if (printLabels(items, size, { showName, showPrice })) onClose();
   };
 
-  const inp = { background: '#0f172a', border: `1px solid ${C.border}`, borderRadius: 6, padding: '6px 8px', color: C.text, fontSize: 13 };
+  const inp = { background: 'var(--bg)', border: `1px solid ${C.border}`, borderRadius: 6, padding: '6px 8px', color: C.text, fontSize: 13 };
 
   return (
     <Modal open={open} onClose={onClose} title="🏷️ طباعة باركود" width={720}>

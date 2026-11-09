@@ -178,11 +178,11 @@ async function postOrderGroup(orderId, items, resolve, userId, { deductStock = t
 // ═══════════════════════════════════════════════════════════════
 // 1) رفع تقرير الطلبات
 // ═══════════════════════════════════════════════════════════════
-router.post('/upload/orders', auth, permit('amazon'), async (req, res) => {
-  try {
-    const rows = req.body.rows || [];
+// يسجّل تقرير الطلبات في مركز أمازون — بيرجع null لو الملف مش تقرير طلبات
+async function importOrders(rows) {
+  {
     const found = mapHeaders(rows, ORDER_ALIASES, ['orderId', 'sku']);
-    if (!found) return res.status(400).json({ message: 'لم يتم التعرف على أعمدة تقرير الطلبات (رقم الطلب + SKU)', headers: (rows[0] || []).slice(0, 40) });
+    if (!found) return null;
     const { headerRow, idx } = found;
     const get = (r, f) => idx[f] !== undefined ? r[idx[f]] : '';
     const { resolve } = await buildResolver();
@@ -226,18 +226,26 @@ router.post('/upload/orders', auth, permit('amazon'), async (req, res) => {
         updated++;
       }
     }
-    res.json({ message: `تم: ${inserted} جديد، ${updated} محدّث، ${skipped} متجاهل`, inserted, updated, skipped });
+    return { message: `تم: ${inserted} جديد، ${updated} محدّث، ${skipped} متجاهل`, inserted, updated, skipped };
+  }
+}
+
+router.post('/upload/orders', auth, permit('amazon'), async (req, res) => {
+  try {
+    const r = await importOrders(req.body.rows || []);
+    if (!r) return res.status(400).json({ message: 'لم يتم التعرف على أعمدة تقرير الطلبات (رقم الطلب + SKU)' });
+    res.json(r);
   } catch (e) { res.status(500).json({ message: e.message }); }
 });
 
 // ═══════════════════════════════════════════════════════════════
 // 2) رفع تقرير المعاملات / التسوية (Date Range Transaction Report)
 // ═══════════════════════════════════════════════════════════════
-router.post('/upload/transactions', auth, permit('amazon'), async (req, res) => {
-  try {
-    const rows = req.body.rows || [];
+// يسجّل تقرير المعاملات في مركز أمازون — بيرجع null لو الملف مش تقرير معاملات
+async function importTransactions(rows) {
+  {
     const found = mapHeaders(rows, TX_ALIASES, ['type', 'total']);
-    if (!found) return res.status(400).json({ message: 'لم يتم التعرف على أعمدة تقرير المعاملات (النوع + الإجمالي)', headers: (rows[0] || []).slice(0, 40) });
+    if (!found) return null;
     const { headerRow, idx } = found;
     const get = (r, f) => idx[f] !== undefined ? r[idx[f]] : '';
 
@@ -273,7 +281,15 @@ router.post('/upload/transactions', auth, permit('amazon'), async (req, res) => 
       const out = await AmazonTransaction.bulkWrite(ops.slice(i, i + 500), { ordered: false });
       inserted += out.upsertedCount || 0;
     }
-    res.json({ message: `تم: ${inserted} معاملة جديدة، ${ops.length - inserted} موجودة مسبقاً`, inserted, duplicates: ops.length - inserted });
+    return { message: `تم: ${inserted} معاملة جديدة، ${ops.length - inserted} موجودة مسبقاً`, inserted, duplicates: ops.length - inserted };
+  }
+}
+
+router.post('/upload/transactions', auth, permit('amazon'), async (req, res) => {
+  try {
+    const r = await importTransactions(req.body.rows || []);
+    if (!r) return res.status(400).json({ message: 'لم يتم التعرف على أعمدة تقرير المعاملات (النوع + الإجمالي)' });
+    res.json(r);
   } catch (e) { res.status(500).json({ message: e.message }); }
 });
 
@@ -336,46 +352,6 @@ router.post('/orders/post-sales', auth, permit('amazon'), async (req, res) => {
       if (r.reason) skipped.push({ orderId, reason: r.reason }); else posted++;
     }
     res.json({ message: `تم ترحيل ${posted} طلب لفواتير بيع` + (skipped.length ? ` — ${skipped.length} متوقف` : ''), posted, skipped });
-  } catch (e) { res.status(500).json({ message: e.message }); }
-});
-
-// ═══════════════════════════════════════════════════════════════
-// مطابقة البضاعة اللي خرجت بالاسكانر مع الطلبات اللي في التقرير
-// ═══════════════════════════════════════════════════════════════
-router.get('/dispatch-compare', auth, permit('amazon', 'amazon:read', 'stock'), async (req, res) => {
-  try {
-    const from = req.query.from ? new Date(req.query.from) : new Date(Date.now() - 6 * 864e5);
-    from.setHours(0, 0, 0, 0);
-    const to = req.query.to ? new Date(req.query.to) : new Date();
-    to.setHours(23, 59, 59, 999);
-    const { resolve, products } = await buildResolver();
-    const byId = new Map(products.map(p => [String(p._id), p]));
-
-    const [moves, orders] = await Promise.all([
-      StockMovement.find({ type: 'out', reason: DISPATCH_REASON, createdAt: { $gte: from, $lte: to } }).lean(),
-      AmazonOrder.find({ purchaseDate: { $gte: from, $lte: to }, stage: { $ne: 'cancelled' } }).lean()
-    ]);
-    const rows = {};
-    const row = (id) => (rows[id] ||= { _id: id, name: byId.get(id)?.name || '؟', stock: byId.get(id)?.stock, ordered: 0, dispatched: 0, orderIds: new Set(), skus: new Set() });
-    for (const m of moves) row(String(m.product)).dispatched += m.qty;
-    const unmapped = {};
-    for (const o of orders) {
-      const p = resolve(o.sku, o.asin);
-      if (!p) { unmapped[o.sku] = (unmapped[o.sku] || 0) + o.qty; continue; }
-      const r = row(String(p._id));
-      r.ordered += o.qty; r.orderIds.add(o.orderId); r.skus.add(o.sku);
-    }
-    const list = Object.values(rows).map(r => {
-      const diff = r.dispatched - r.ordered;
-      return { ...r, orderIds: [...r.orderIds], skus: [...r.skus], diff, status: diff === 0 ? 'matched' : diff > 0 ? 'over' : 'short' };
-    }).sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff));
-    const t = (k) => list.reduce((s, r) => s + r[k], 0);
-    res.json({
-      from, to, rows: list,
-      totals: { ordered: t('ordered'), dispatched: t('dispatched'), orders: new Set(orders.map(o => o.orderId)).size,
-        matched: list.filter(r => r.status === 'matched').length, over: list.filter(r => r.status === 'over').length, short: list.filter(r => r.status === 'short').length },
-      unmapped: Object.entries(unmapped).map(([sku, qty]) => ({ sku, qty }))
-    });
   } catch (e) { res.status(500).json({ message: e.message }); }
 });
 
@@ -684,4 +660,6 @@ router.get('/overview', auth, permit('amazon', 'amazon:read'), async (req, res) 
 module.exports = router;
 module.exports.postOrderGroup = postOrderGroup;
 module.exports.buildResolver = buildResolver;
+module.exports.importOrders = importOrders;
+module.exports.importTransactions = importTransactions;
 module.exports._test = { num, parseDate, mapHeaders, stageFromAmazon, kindFromType, ORDER_ALIASES, TX_ALIASES };
