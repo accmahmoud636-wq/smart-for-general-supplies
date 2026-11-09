@@ -5,7 +5,7 @@ import { C_THEME as C } from './UI';
 
 const NAV = [
   { path: '/',           icon: '📊', label: 'لوحة التحكم',   perm: null },
-  { path: '/scan',       icon: '📤', label: 'خروج بالاسكانر',  perm: 'stock' },
+  { path: '/shipments',  icon: '📦', label: 'الشحنات والتسليم', perm: 'stock' },
   { path: '/amazon',     icon: '🛒', label: 'مركز أمازون',    perm: 'amazon:read' },
   { path: '/products',   icon: '📦', label: 'المنتجات',       perm: 'products:read' },
   { path: '/categories', icon: '🏷️', label: 'الفئات',         perm: 'categories' },

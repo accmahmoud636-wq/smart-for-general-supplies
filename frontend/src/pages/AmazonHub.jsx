@@ -176,7 +176,7 @@ function OrdersTab({ canEdit, onChange }) {
             <Btn size="sm" variant="danger" onClick={() => setStageFor('returned')}>↩️ مرتجع</Btn>
             <Btn size="sm" variant="ghost" onClick={() => setStageFor('cancelled')}>✖ ملغي</Btn>
             <div style={{ marginRight: 'auto', display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-              <label style={{ fontSize: 12, color: C.sub }} title="سيبها مش متعلّمة لو بتخرّج البضاعة بشاشة «خروج لأمازون» — عشان المخزون ما يتخصمش مرتين">
+              <label style={{ fontSize: 12, color: C.sub }} title="سيبها مش متعلّمة لو بتخرّج البضاعة بشاشة «الشحنات والتسليم» — عشان المخزون ما يتخصمش مرتين">
                 <input type="checkbox" checked={deduct} onChange={e => toggleDeduct(e.target.checked)} /> اخصم من المخزون كمان
               </label>
               <Btn size="sm" onClick={postSales} disabled={busy}>{busy ? '⏳...' : '🧾 ترحيل المشحون لفواتير بيع'}</Btn>
@@ -227,8 +227,8 @@ function UploadTab({ canEdit, onDone, goSkus }) {
       <div style={{ fontWeight: 800, fontSize: 16, marginBottom: 6 }}>{title}</div>
       <div style={{ fontSize: 12, color: C.sub, lineHeight: 1.9, marginBottom: 14 }}>{how}</div>
       <label style={{ display: 'block', border: `2px dashed ${C.border}`, borderRadius: 10, padding: 22, textAlign: 'center', cursor: 'pointer', color: C.sub }}>
-        {busy === kind ? '⏳ جاري الرفع...' : '📁 اختار ملف CSV أو TXT'}
-        <input type="file" accept=".csv,.txt,.tsv" style={{ display: 'none' }} disabled={!!busy} onChange={e => { upload(kind, e.target.files[0]); e.target.value = ''; }} />
+        {busy === kind ? '⏳ جاري الرفع...' : '📁 اختار ملف Excel أو CSV أو TXT'}
+        <input type="file" accept=".csv,.txt,.tsv,.xlsx,.xls" style={{ display: 'none' }} disabled={!!busy} onChange={e => { upload(kind, e.target.files[0]); e.target.value = ''; }} />
       </label>
     </Card>
   );
@@ -542,7 +542,7 @@ function DispatchTab() {
   return (
     <div>
       <Card style={{ marginBottom: 14, fontSize: 13, color: C.sub, lineHeight: 1.9 }}>
-        بيقارن القطع اللي خرجت من شاشة <b>«🚚 خروج لأمازون»</b> مع الكميات المطلوبة في <b>تقرير الطلبات</b> لنفس الفترة (بتاريخ الطلب).
+        بيقارن القطع اللي خرجت من شاشة <b>«📦 الشحنات والتسليم»</b> (المبيعات المرحّلة) مع الكميات المطلوبة في <b>تقرير الطلبات</b> لنفس الفترة (بتاريخ الطلب).
         الطلبات الملغية مش محسوبة. لو بتشحن طلبات آخر اليوم تاني يوم، وسّع الفترة يوم.
       </Card>
       <DateFilter value={range} onChange={setRange} />

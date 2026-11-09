@@ -29,9 +29,23 @@ export function parseDelimited(text) {
 }
 
 export async function readReportFile(file) {
-  if (/\.xlsx?$/i.test(file.name)) throw new Error('احفظ التقرير CSV أو TXT من Seller Central (ملفات Excel غير مدعومة حالياً)');
   const buf = await file.arrayBuffer();
+  if (/\.xls[xm]?$/i.test(file.name)) return parseExcel(buf);
   let text = new TextDecoder('utf-8').decode(buf);
   if (text.includes('�')) text = new TextDecoder('windows-1256').decode(buf); // ملفات عربية قديمة
   return parseDelimited(text);
+}
+
+// ملف Excel: أول شيت ← صفوف نصوص (التواريخ بتتحول ISO عشان تتقري صح)
+async function parseExcel(buf) {
+  const XLSX = await import('xlsx');      // بيتحمّل بس لما ترفع Excel
+  const wb = XLSX.read(buf, { type: 'array', cellDates: true });
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  const rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: '' });
+  const pad = (n) => String(n).padStart(2, '0');
+  return rows
+    .map(r => r.map(v => v instanceof Date
+      ? `${v.getFullYear()}-${pad(v.getMonth() + 1)}-${pad(v.getDate())}T${pad(v.getHours())}:${pad(v.getMinutes())}:${pad(v.getSeconds())}`
+      : String(v ?? '')))
+    .filter(r => r.some(v => v.trim() !== ''));
 }
