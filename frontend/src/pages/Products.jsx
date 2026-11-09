@@ -1,12 +1,10 @@
 import { useState, useEffect } from 'react';
 import api from '../utils/api';
-import { Card, Btn, Badge, Input, Select, Modal, Table, PageHeader, fmt, C_THEME as C, THEME } from '../components/UI';
+import { Card, Btn, Badge, Input, Select, Modal, Table, PageHeader, fmt, C_THEME as C } from '../components/UI';
 import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
 import LabelModal from '../components/LabelModal';
 import CameraScanner from '../components/CameraScanner';
-
-const CUR = THEME.currency || 'ج.م';
 
 export default function Products() {
   const { can } = useAuth();
@@ -96,12 +94,12 @@ export default function Products() {
   };
 
   const columns = [
-    { key: 'name', title: 'المنتج', render: (v, r) => <div><div style={{ fontWeight: 600 }}>{v}</div><div style={{ fontSize: 11, color: 'var(--muted)', direction: 'ltr', textAlign: 'right' }}>{[r.sku, r.asin].filter(Boolean).join(' · ')}</div>{r.barcode && <div style={{ fontSize: 11, color: '#818cf8', fontFamily: 'monospace' }}>▮▯▮ {r.barcode}</div>}{skusOf(r._id).length > 0 && <div title={skusOf(r._id).join('\n')} style={{ fontSize: 11, color: '#f59e0b' }}>🔗 {skusOf(r._id).length} إعلان أمازون</div>}</div> },
+    { key: 'name', title: 'المنتج', render: (v, r) => <div><div style={{ fontWeight: 600 }}>{v}</div><div style={{ fontSize: 11, color: '#64748b' }}>{r.sku} · {r.asin}</div>{r.barcode && <div style={{ fontSize: 11, color: '#818cf8', fontFamily: 'monospace' }}>▮▯▮ {r.barcode}</div>}{skusOf(r._id).length > 0 && <div title={skusOf(r._id).join('\n')} style={{ fontSize: 11, color: '#f59e0b' }}>🔗 {skusOf(r._id).length} إعلان أمازون</div>}</div> },
     { key: 'category', title: 'الفئة', render: (v) => v ? <Badge color={v.color || '#6366f1'}>{v.name}</Badge> : '—' },
-    { key: 'buyPrice', title: 'سعر الشراء', render: v => `${fmt(v)} ${CUR}` },
-    { key: 'sellPrice', title: 'سعر البيع', render: v => `${fmt(v)} ${CUR}` },
+    { key: 'buyPrice', title: 'سعر الشراء', render: v => `${fmt(v)} ر.س` },
+    { key: 'sellPrice', title: 'سعر البيع', render: v => `${fmt(v)} ر.س` },
     { key: 'stock', title: 'المخزون', render: (v, r) => <span style={{ color: v <= r.minStock ? '#ef4444' : '#10b981', fontWeight: 700 }}>{v} {r.unit}{v <= r.minStock ? ' ⚠️' : ''}</span> },
-    { key: 'buyPrice', title: 'قيمة المخزون', render: (v, r) => `${fmt(v * r.stock)} ${CUR}` },
+    { key: 'buyPrice', title: 'قيمة المخزون', render: (v, r) => `${fmt(v * r.stock)} ر.س` },
     { key: '_id', title: 'إجراءات', render: (_, r) => (
       <div style={{ display: 'flex', gap: 6 }}>
         {can('products') && <Btn size="sm" variant="ghost" onClick={() => openEdit(r)}>✏️</Btn>}
@@ -122,15 +120,15 @@ export default function Products() {
       <Card style={{ marginBottom: 16 }}>
         <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="🔍 بحث بالاسم، SKU، ASIN..."
-            style={{ flex: 1, minWidth: 200, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 12px', color: 'var(--text)', fontSize: 14, outline: 'none' }} />
+            style={{ flex: 1, minWidth: 200, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 12px', color: '#e2e8f0', fontSize: 14, outline: 'none' }} />
           <Btn variant="ghost" onClick={() => setCam('search')}>📷</Btn>
-          <div style={{ fontSize: 13, color: 'var(--muted)' }}>{filtered.length} منتج</div>
+          <div style={{ fontSize: 13, color: '#64748b' }}>{filtered.length} منتج</div>
           <div style={{ fontSize: 13, color: '#ef4444' }}>{filtered.filter(p => p.stock <= p.minStock).length} منخفض المخزون</div>
         </div>
       </Card>
 
       <Card>
-        {loading ? <div style={{ textAlign: 'center', padding: 40, color: 'var(--muted)' }}>تحميل...</div> : <Table columns={columns} data={filtered} />}
+        {loading ? <div style={{ textAlign: 'center', padding: 40, color: '#64748b' }}>تحميل...</div> : <Table columns={columns} data={filtered} />}
       </Card>
 
       {/* Add/Edit Modal */}
@@ -144,7 +142,7 @@ export default function Products() {
             <div style={{ marginBottom: 14, display: 'flex', gap: 6 }}><Btn variant="ghost" onClick={() => setCam('form')}>📷</Btn><Btn variant="ghost" onClick={newBarcode}>🎲 توليد</Btn></div>
           </div>
           <div style={{ gridColumn: '1/-1', marginBottom: 14, padding: 12, border: '1px dashed var(--border)', borderRadius: 10 }}>
-            <label style={{ display: 'block', fontSize: 12, color: 'var(--sub)', marginBottom: 6, fontWeight: 600 }}>🔗 SKUs أمازون للصنف ده (كل إعلان ليه SKU — ضيفهم كلهم هنا)</label>
+            <label style={{ display: 'block', fontSize: 12, color: '#94a3b8', marginBottom: 6, fontWeight: 600 }}>🔗 SKUs أمازون للصنف ده (كل إعلان ليه SKU — ضيفهم كلهم هنا)</label>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
               {form.sku && <Badge color="#64748b">{form.sku} (SKU الصنف)</Badge>}
               {skus.map(x => (
@@ -153,26 +151,18 @@ export default function Products() {
                   <button onClick={() => setSkus(skus.filter(y => y !== x))} style={{ background: 'none', border: 'none', color: '#f87171', cursor: 'pointer', fontSize: 14, lineHeight: 1 }}>×</button>
                 </span>
               ))}
-              {!skus.length && !form.sku && <span style={{ fontSize: 12, color: 'var(--muted)' }}>مفيش SKUs لسه</span>}
+              {!skus.length && !form.sku && <span style={{ fontSize: 12, color: '#64748b' }}>مفيش SKUs لسه</span>}
             </div>
             <div style={{ display: 'flex', gap: 6 }}>
               <input value={skuInput} onChange={e => setSkuInput(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addSku(); } }} placeholder="اكتب SKU الإعلان واضغط Enter"
-                style={{ flex: 1, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 12px', color: 'var(--text)', fontSize: 13, outline: 'none', direction: 'ltr' }} />
+                style={{ flex: 1, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 12px', color: '#e2e8f0', fontSize: 13, outline: 'none', direction: 'ltr' }} />
               <Btn variant="ghost" onClick={addSku}>+ إضافة</Btn>
             </div>
           </div>
-          <div style={{ display: 'flex', gap: 6, alignItems: 'flex-end' }}>
-            <div style={{ flex: 1 }}><Select label="الفئة" value={form.category} onChange={v => setForm({...form,category:v})} options={categories.map(c => ({ value: c._id, label: c.name }))} /></div>
-            {can('categories') && <div style={{ marginBottom: 14 }}><Btn variant="ghost" onClick={async () => {
-              const name = prompt('اسم الفئة الجديدة:');
-              if (!name?.trim()) return;
-              try { const { data } = await api.post('/categories', { name: name.trim() }); setCategories(c => [...c, data]); setForm(f => ({ ...f, category: data._id })); toast.success('اتضافت الفئة'); }
-              catch (e) { toast.error(e.response?.data?.message || 'خطأ'); }
-            }}>+ فئة</Btn></div>}
-          </div>
+          <Select label="الفئة" value={form.category} onChange={v => setForm({...form,category:v})} options={categories.map(c => ({ value: c._id, label: c.name }))} />
           <Select label="المورد" value={form.supplier} onChange={v => setForm({...form,supplier:v})} options={suppliers.map(s => ({ value: s._id, label: s.name }))} />
-          <Input label={`سعر الشراء (${CUR})`} type="number" value={form.buyPrice} onChange={v => setForm({...form,buyPrice:v})} required />
-          <Input label={`سعر البيع (${CUR})`} type="number" value={form.sellPrice} onChange={v => setForm({...form,sellPrice:v})} required />
+          <Input label="سعر الشراء (ر.س)" type="number" value={form.buyPrice} onChange={v => setForm({...form,buyPrice:v})} required />
+          <Input label="سعر البيع (ر.س)" type="number" value={form.sellPrice} onChange={v => setForm({...form,sellPrice:v})} required />
           {!editing && <Input label="الكمية الابتدائية" type="number" value={form.stock} onChange={v => setForm({...form,stock:v})} />}
           <Input label="حد التنبيه (مخزون منخفض)" type="number" value={form.minStock} onChange={v => setForm({...form,minStock:v})} />
           <Input label="الوحدة" value={form.unit} onChange={v => setForm({...form,unit:v})} />
@@ -190,7 +180,7 @@ export default function Products() {
       {/* Adjust Stock Modal */}
       <Modal open={!!adjustModal} onClose={() => setAdjustModal(null)} title={`تسوية مخزون: ${adjustModal?.name}`} width={400}>
         <div style={{ marginBottom: 12, padding: 12, background: 'var(--bg)', borderRadius: 8, fontSize: 13 }}>
-          <span style={{ color: 'var(--muted)' }}>المخزون الحالي: </span>
+          <span style={{ color: '#64748b' }}>المخزون الحالي: </span>
           <span style={{ color: '#10b981', fontWeight: 700 }}>{adjustModal?.stock} {adjustModal?.unit}</span>
         </div>
         <Input label="الكمية (موجبة للإضافة، سالبة للخصم)" type="number" value={adjustQty} onChange={setAdjustQty} placeholder="مثال: +10 أو -5" />

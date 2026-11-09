@@ -1,10 +1,8 @@
 import { useState, useEffect } from 'react';
 import api from '../utils/api';
-import { Card, Btn, Badge, Input, Select, Modal, Table, PageHeader, StatCard, fmt, fmtDate, C_THEME as C, THEME } from '../components/UI';
+import { Card, Btn, Badge, Input, Select, Modal, Table, PageHeader, StatCard, fmt, fmtDate, C_THEME as C } from '../components/UI';
 import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
-
-const CUR = THEME.currency || 'ج.م';
 
 const STATUS_COLORS = { pending:'#f59e0b', received:'#10b981', draft:'#64748b', partial:'#3b82f6', paid:'#10b981', shipped:'#6366f1', delivered:'#10b981', returned:'#ef4444', cancelled:'#ef4444' };
 const STATUS_LABELS = { pending:'معلق', received:'مستلم', draft:'مسودة', partial:'جزئي', paid:'مدفوع', shipped:'مشحون', delivered:'تم التسليم', returned:'مرتجع', cancelled:'ملغي' };
@@ -49,8 +47,8 @@ export function Purchases() {
     { key:'date', title:'التاريخ', render:v=>fmtDate(v) },
     { key:'supplier', title:'المورد', render:v=><span style={{fontWeight:600}}>{v?.name}</span> },
     { key:'items', title:'المنتجات', render:v=>`${v?.length} منتج` },
-    { key:'total', title:'الإجمالي', render:v=><span style={{fontWeight:700}}>{fmt(v)} {CUR}</span> },
-    { key:'paid', title:'المدفوع', render:(v,r)=><span style={{color:v>=r.total?'#10b981':'#f59e0b',fontWeight:700}}>{fmt(v)} {CUR}</span> },
+    { key:'total', title:'الإجمالي', render:v=><span style={{fontWeight:700}}>{fmt(v)} ر.س</span> },
+    { key:'paid', title:'المدفوع', render:(v,r)=><span style={{color:v>=r.total?'#10b981':'#f59e0b',fontWeight:700}}>{fmt(v)} ر.س</span> },
     { key:'status', title:'الحالة', render:v=><Badge color={STATUS_COLORS[v]||'#64748b'}>{STATUS_LABELS[v]||v}</Badge> },
   ];
 
@@ -61,9 +59,9 @@ export function Purchases() {
     <div>
       <PageHeader title="فواتير الشراء" icon="🛒" actions={can('purchases') && [<Btn key="a" onClick={()=>{setLines([{product:'',qty:1,price:0}]);setForm({supplier:'',discount:0,shipping:0,paid:0,status:'pending',date:new Date().toISOString().slice(0,10),notes:''});setModal(true);}}>+ فاتورة شراء</Btn>]} />
       <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:14,marginBottom:16}}>
-        <StatCard label="إجمالي المشتريات" value={`${fmt(totalAmount)} ${CUR}`} icon="🛒" color="#3b82f6" />
-        <StatCard label="إجمالي المدفوع" value={`${fmt(totalPaid)} ${CUR}`} icon="✅" color="#10b981" />
-        <StatCard label="المستحق للموردين" value={`${fmt(totalAmount-totalPaid)} ${CUR}`} icon="⏳" color="#f59e0b" />
+        <StatCard label="إجمالي المشتريات" value={`${fmt(totalAmount)} ر.س`} icon="🛒" color="#3b82f6" />
+        <StatCard label="إجمالي المدفوع" value={`${fmt(totalPaid)} ر.س`} icon="✅" color="#10b981" />
+        <StatCard label="المستحق للموردين" value={`${fmt(totalAmount-totalPaid)} ر.س`} icon="⏳" color="#f59e0b" />
       </div>
       <Card><Table columns={cols} data={items} /></Card>
 
@@ -74,19 +72,19 @@ export function Purchases() {
         </div>
         {/* Items */}
         <div style={{marginBottom:14}}>
-          <div style={{fontSize:12,color:'var(--sub)',marginBottom:8,fontWeight:600}}>المنتجات</div>
+          <div style={{fontSize:12,color:'#94a3b8',marginBottom:8,fontWeight:600}}>المنتجات</div>
           {lines.map((line,i)=>(
             <div key={i} style={{display:'flex',gap:8,marginBottom:8,alignItems:'center'}}>
               <select value={line.product} onChange={e=>updateLine(i,'product',e.target.value)}
-                style={{flex:2,background:'var(--bg)',border:'1px solid var(--border)',borderRadius:8,padding:'8px 10px',color:'var(--text)',fontSize:13,outline:'none'}}>
+                style={{flex:2,background:'var(--bg)',border:'1px solid var(--border)',borderRadius:8,padding:'8px 10px',color:'#e2e8f0',fontSize:13,outline:'none'}}>
                 <option value="">-- المنتج --</option>
                 {products.map(p=><option key={p._id} value={p._id}>{p.name}</option>)}
               </select>
               <input type="number" value={line.qty} onChange={e=>updateLine(i,'qty',e.target.value)} placeholder="الكمية" min="1"
-                style={{width:70,background:'var(--bg)',border:'1px solid var(--border)',borderRadius:8,padding:'8px 10px',color:'var(--text)',fontSize:13,outline:'none'}} />
+                style={{width:70,background:'var(--bg)',border:'1px solid var(--border)',borderRadius:8,padding:'8px 10px',color:'#e2e8f0',fontSize:13,outline:'none'}} />
               <input type="number" value={line.price} onChange={e=>updateLine(i,'price',e.target.value)} placeholder="السعر"
-                style={{width:90,background:'var(--bg)',border:'1px solid var(--border)',borderRadius:8,padding:'8px 10px',color:'var(--text)',fontSize:13,outline:'none'}} />
-              <span style={{minWidth:70,color:'#10b981',fontSize:12,fontWeight:700}}>{fmt(line.qty*line.price)} {CUR}</span>
+                style={{width:90,background:'var(--bg)',border:'1px solid var(--border)',borderRadius:8,padding:'8px 10px',color:'#e2e8f0',fontSize:13,outline:'none'}} />
+              <span style={{minWidth:70,color:'#10b981',fontSize:12,fontWeight:700}}>{fmt(line.qty*line.price)} ر.س</span>
               {lines.length>1 && <button onClick={()=>removeLine(i)} style={{background:'none',border:'none',color:'#ef4444',cursor:'pointer',fontSize:16}}>×</button>}
             </div>
           ))}
@@ -94,13 +92,13 @@ export function Purchases() {
         </div>
         {/* Totals */}
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:'0 16px'}}>
-          <Input label={`خصم (${CUR})`} type="number" value={form.discount} onChange={v=>setForm({...form,discount:v})} />
-          <Input label={`شحن (${CUR})`} type="number" value={form.shipping} onChange={v=>setForm({...form,shipping:v})} />
-          <Input label={`المدفوع (${CUR})`} type="number" value={form.paid} onChange={v=>setForm({...form,paid:v})} />
+          <Input label="خصم (ر.س)" type="number" value={form.discount} onChange={v=>setForm({...form,discount:v})} />
+          <Input label="شحن (ر.س)" type="number" value={form.shipping} onChange={v=>setForm({...form,shipping:v})} />
+          <Input label="المدفوع (ر.س)" type="number" value={form.paid} onChange={v=>setForm({...form,paid:v})} />
         </div>
         <div style={{background:'var(--bg)',borderRadius:8,padding:12,marginBottom:14,display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-          <span style={{color:'var(--sub)',fontSize:13}}>الإجمالي النهائي</span>
-          <span style={{color:'#10b981',fontWeight:800,fontSize:18}}>{fmt(total)} {CUR}</span>
+          <span style={{color:'#94a3b8',fontSize:13}}>الإجمالي النهائي</span>
+          <span style={{color:'#10b981',fontWeight:800,fontSize:18}}>{fmt(total)} ر.س</span>
         </div>
         <Select label="الحالة" value={form.status} onChange={v=>setForm({...form,status:v})} options={[{value:'pending',label:'معلق'},{value:'received',label:'مستلم'},{value:'partial',label:'جزئي الدفع'},{value:'paid',label:'مدفوع'}]} />
         <div style={{display:'flex',gap:8,justifyContent:'flex-end'}}><Btn variant="ghost" onClick={()=>setModal(false)}>إلغاء</Btn><Btn variant="success" onClick={save}>💾 حفظ وتحديث المخزون</Btn></div>
@@ -148,7 +146,7 @@ export function Sales() {
     { key:'date', title:'التاريخ', render:v=>fmtDate(v) },
     { key:'platform', title:'المنصة', render:v=><Badge color={v==='amazon'?'#f59e0b':'#6366f1'}>{v}</Badge> },
     { key:'amazonOrderId', title:'رقم Amazon' },
-    { key:'total', title:'الإجمالي', render:v=><span style={{fontWeight:700,color:'#10b981'}}>{fmt(v)} {CUR}</span> },
+    { key:'total', title:'الإجمالي', render:v=><span style={{fontWeight:700,color:'#10b981'}}>{fmt(v)} ر.س</span> },
     { key:'status', title:'الحالة', render:v=><Badge color={STATUS_COLORS[v]||'#64748b'}>{STATUS_LABELS[v]||v}</Badge> },
   ];
 
@@ -156,9 +154,9 @@ export function Sales() {
     <div>
       <PageHeader title="فواتير المبيعات" icon="💳" actions={can('sales') && [<Btn key="a" onClick={()=>{setLines([{product:'',qty:1,price:0}]);setForm({customer:'',platform:'amazon',amazonOrderId:'',discount:0,shipping:0,amazonFees:0,paid:0,status:'pending',date:new Date().toISOString().slice(0,10),notes:''});setModal(true);}}>+ فاتورة بيع</Btn>]} />
       <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:14,marginBottom:16}}>
-        <StatCard label="إجمالي المبيعات" value={`${fmt(totalRevenue)} ${CUR}`} icon="💰" color="#10b981" />
+        <StatCard label="إجمالي المبيعات" value={`${fmt(totalRevenue)} ر.س`} icon="💰" color="#10b981" />
         <StatCard label="عدد الفواتير" value={items.length} icon="📄" color="#6366f1" />
-        <StatCard label="متوسط قيمة الطلب" value={`${fmt(items.length?totalRevenue/items.length:0)} ${CUR}`} icon="📊" color="#3b82f6" />
+        <StatCard label="متوسط قيمة الطلب" value={`${fmt(items.length?totalRevenue/items.length:0)} ر.س`} icon="📊" color="#3b82f6" />
       </div>
       <Card><Table columns={cols} data={items} /></Card>
 
@@ -170,19 +168,19 @@ export function Sales() {
         </div>
         {/* Items */}
         <div style={{marginBottom:14}}>
-          <div style={{fontSize:12,color:'var(--sub)',marginBottom:8,fontWeight:600}}>المنتجات</div>
+          <div style={{fontSize:12,color:'#94a3b8',marginBottom:8,fontWeight:600}}>المنتجات</div>
           {lines.map((line,i)=>(
             <div key={i} style={{display:'flex',gap:8,marginBottom:8,alignItems:'center'}}>
               <select value={line.product} onChange={e=>updateLine(i,'product',e.target.value)}
-                style={{flex:2,background:'var(--bg)',border:'1px solid var(--border)',borderRadius:8,padding:'8px 10px',color:'var(--text)',fontSize:13,outline:'none'}}>
+                style={{flex:2,background:'var(--bg)',border:'1px solid var(--border)',borderRadius:8,padding:'8px 10px',color:'#e2e8f0',fontSize:13,outline:'none'}}>
                 <option value="">-- المنتج --</option>
                 {products.map(p=><option key={p._id} value={p._id}>{p.name} (مخزون: {p.stock})</option>)}
               </select>
               <input type="number" value={line.qty} onChange={e=>updateLine(i,'qty',e.target.value)} placeholder="الكمية" min="1"
-                style={{width:70,background:'var(--bg)',border:'1px solid var(--border)',borderRadius:8,padding:'8px 10px',color:'var(--text)',fontSize:13,outline:'none'}} />
+                style={{width:70,background:'var(--bg)',border:'1px solid var(--border)',borderRadius:8,padding:'8px 10px',color:'#e2e8f0',fontSize:13,outline:'none'}} />
               <input type="number" value={line.price} onChange={e=>updateLine(i,'price',e.target.value)} placeholder="السعر"
-                style={{width:90,background:'var(--bg)',border:'1px solid var(--border)',borderRadius:8,padding:'8px 10px',color:'var(--text)',fontSize:13,outline:'none'}} />
-              <span style={{minWidth:70,color:'#10b981',fontSize:12,fontWeight:700}}>{fmt(line.qty*line.price)} {CUR}</span>
+                style={{width:90,background:'var(--bg)',border:'1px solid var(--border)',borderRadius:8,padding:'8px 10px',color:'#e2e8f0',fontSize:13,outline:'none'}} />
+              <span style={{minWidth:70,color:'#10b981',fontSize:12,fontWeight:700}}>{fmt(line.qty*line.price)} ر.س</span>
               {lines.length>1 && <button onClick={()=>removeLine(i)} style={{background:'none',border:'none',color:'#ef4444',cursor:'pointer',fontSize:16}}>×</button>}
             </div>
           ))}
@@ -195,8 +193,8 @@ export function Sales() {
           <Input label="المدفوع" type="number" value={form.paid} onChange={v=>setForm({...form,paid:v})} />
         </div>
         <div style={{background:'var(--bg)',borderRadius:8,padding:12,marginBottom:14,display:'flex',justifyContent:'space-between'}}>
-          <span style={{color:'var(--sub)',fontSize:13}}>الإجمالي النهائي</span>
-          <span style={{color:'#10b981',fontWeight:800,fontSize:18}}>{fmt(total)} {CUR}</span>
+          <span style={{color:'#94a3b8',fontSize:13}}>الإجمالي النهائي</span>
+          <span style={{color:'#10b981',fontWeight:800,fontSize:18}}>{fmt(total)} ر.س</span>
         </div>
         <Select label="الحالة" value={form.status} onChange={v=>setForm({...form,status:v})} options={[{value:'pending',label:'معلق'},{value:'shipped',label:'مشحون'},{value:'delivered',label:'تم التسليم'},{value:'cancelled',label:'ملغي'}]} />
         <div style={{display:'flex',gap:8,justifyContent:'flex-end'}}><Btn variant="ghost" onClick={()=>setModal(false)}>إلغاء</Btn><Btn variant="success" onClick={save}>💾 حفظ وخصم المخزون</Btn></div>

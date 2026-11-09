@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef } from 'react';
-import { useSearchParams } from 'react-router-dom';
 import api from '../utils/api';
 import { Card, Btn, Badge, Table, PageHeader, StatCard, fmtDate, C_THEME as C } from '../components/UI';
 import { beep, printLabels } from '../utils/barcode';
@@ -22,20 +21,12 @@ const err = (e) => e.response?.data?.message || e.message || 'خطأ';
 // الصفحة: قائمة الشحنات ← شحنة (مسح) ← مطابقة | الموظفين
 // ═══════════════════════════════════════════════════════════
 export default function Shipments() {
-  // روابط من الرئيسية: ?new=1 شحنة جديدة، ?open=ID يفتح شحنة، ?status=draft فلتر
-  const [sp, setSp] = useSearchParams();
-  const [view, setView] = useState(() => sp.get('new') ? { name: 'edit' } : { name: 'list' });
+  const [view, setView] = useState({ name: 'list' });   // list | edit {id} | match {id} | employees
   const open = (s) => setView({ name: s.status === 'draft' ? 'edit' : 'match', id: s._id });
-  useEffect(() => {
-    const id = sp.get('open');
-    if (id) api.get(`/shipments/${id}`).then(r => open(r.data)).catch(() => {});
-    if (sp.get('new')) setView({ name: 'edit' });
-    if (sp.get('new') || id) setSp({}, { replace: true });
-  }, [sp.get('new'), sp.get('open')]);
 
   return (
     <div>
-      {view.name === 'list' && <ShipmentList onNew={() => setView({ name: 'edit' })} onOpen={open} initialFilter={sp.get('status') || ''} />}
+      {view.name === 'list' && <ShipmentList onNew={() => setView({ name: 'edit' })} onOpen={open} />}
       {view.name === 'edit' && <ShipmentEditor id={view.id} onBack={() => setView({ name: 'list' })} onPosted={(id) => setView({ name: 'match', id })} />}
       {view.name === 'match' && <ShipmentMatch id={view.id} onBack={() => setView({ name: 'list' })} />}
     </div>
@@ -43,9 +34,9 @@ export default function Shipments() {
 }
 
 // ═══ قائمة الشحنات ═══════════════════════════════════════════
-function ShipmentList({ onNew, onOpen, initialFilter = '' }) {
+function ShipmentList({ onNew, onOpen }) {
   const [list, setList] = useState([]);
-  const [filter, setFilter] = useState(initialFilter);
+  const [filter, setFilter] = useState('');
   useEffect(() => { api.get('/shipments', { params: { status: filter } }).then(r => setList(r.data)).catch(e => toast.error(err(e))); }, [filter]);
   const drafts = list.filter(s => s.status === 'draft').length;
 
@@ -222,7 +213,7 @@ function ShipmentEditor({ id: initialId, onBack, onPosted }) {
         <div style={{ display: 'flex', gap: 8 }}>
           <input ref={ref} value={code} onChange={e => setCode(e.target.value)} onKeyDown={e => e.key === 'Enter' && onScan()} autoFocus
             placeholder={employee ? `امسح باركود الصنف (${TYPES[mode].label})` : 'امسح كارت الموظف'}
-            style={{ flex: 1, background: 'var(--bg)', border: `2px solid ${employee ? TYPES[mode].color : '#f59e0b'}`, borderRadius: 10, padding: '14px 16px', color: 'var(--text)', fontSize: 20, outline: 'none', fontFamily: 'monospace', direction: 'ltr', textAlign: 'center' }} />
+            style={{ flex: 1, background: 'var(--bg)', border: `2px solid ${employee ? TYPES[mode].color : '#f59e0b'}`, borderRadius: 10, padding: '14px 16px', color: '#fff', fontSize: 20, outline: 'none', fontFamily: 'monospace', direction: 'ltr', textAlign: 'center' }} />
           <button onClick={() => setCam(true)} title="مسح بالكاميرا" style={{ flexShrink: 0, width: 64, background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', border: 'none', borderRadius: 10, fontSize: 26, cursor: 'pointer' }}>📷</button>
         </div>
         <CameraScanner open={cam} onClose={() => setCam(false)} onScan={onScan} message={flash} continuous title={employee ? `امسح كـ ${TYPES[mode].label}` : 'امسح كارت الموظف'} />
@@ -246,7 +237,7 @@ function ShipmentEditor({ id: initialId, onBack, onPosted }) {
               <option value="return">🔴 مرتجع</option>
             </select>
             <Btn size="sm" variant="ghost" onClick={() => setQty(i, it.qty - 1)}>−</Btn>
-            <input type="number" value={it.qty} onChange={e => setQty(i, +e.target.value)} style={{ width: 64, textAlign: 'center', background: 'var(--card)', border: `1px solid ${C.border}`, borderRadius: 6, padding: 6, color: 'var(--text)', fontSize: 16, fontWeight: 800 }} />
+            <input type="number" value={it.qty} onChange={e => setQty(i, +e.target.value)} style={{ width: 64, textAlign: 'center', background: 'var(--card)', border: `1px solid ${C.border}`, borderRadius: 6, padding: 6, color: '#fff', fontSize: 16, fontWeight: 800 }} />
             <Btn size="sm" variant="ghost" onClick={() => setQty(i, it.qty + 1)}>+</Btn>
             <Btn size="sm" variant="ghost" onClick={() => setQty(i, 0)}>🗑️</Btn>
           </div>

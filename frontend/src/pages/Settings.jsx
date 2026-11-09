@@ -161,7 +161,7 @@ function UsersPerms() {
     </div>
   );
 }
-const sel = { background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8, padding: '9px 12px', color: 'var(--text)', fontSize: 14, outline: 'none', width: '100%' };
+const sel = { background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8, padding: '9px 12px', color: '#e2e8f0', fontSize: 14, outline: 'none', width: '100%' };
 
 // ═══ المظهر والألوان ═══════════════════════════════════════════
 function Theme() {
@@ -189,16 +189,10 @@ function Theme() {
   return (
     <div style={{ maxWidth: 820 }}>
       <Card style={{ marginBottom: 14 }}>
-        <div style={{ fontWeight: 700, marginBottom: 12 }}>اسم المنصة والعملة</div>
+        <div style={{ fontWeight: 700, marginBottom: 12 }}>اسم المنصة</div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 12px' }}>
           <Input label="الاسم (فوق في الشريط الجانبي)" value={t.appName} onChange={v => edit && setT({ ...t, appName: v })} />
           <Input label="السطر الصغير تحته" value={t.appSub} onChange={v => edit && setT({ ...t, appSub: v })} />
-          <div style={{ marginBottom: 14 }}>
-            <label style={{ display: 'block', fontSize: 12, color: C.sub, marginBottom: 5, fontWeight: 600 }}>العملة اللي بتظهر جنب المبالغ</label>
-            <select value={t.currency || 'ج.م'} disabled={!edit} onChange={e => setT({ ...t, currency: e.target.value })} style={sel}>
-              {[['ج.م', 'جنيه مصري (ج.م)'], ['ر.س', 'ريال سعودي (ر.س)'], ['د.إ', 'درهم إماراتي (د.إ)'], ['$', 'دولار ($)']].map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-            </select>
-          </div>
         </div>
       </Card>
 

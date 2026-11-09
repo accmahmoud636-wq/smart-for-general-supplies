@@ -3,7 +3,7 @@ import { Toaster } from 'react-hot-toast';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import Layout from './components/Layout';
 import Login from './pages/Login';
-import Home from './pages/Home';
+import Dashboard from './pages/Dashboard';
 import Products from './pages/Products';
 import { Purchases, Sales } from './pages/Invoices';
 import { Categories, Suppliers, Customers, Expenses, StockPage, Reports } from './pages/OtherPages';
@@ -24,7 +24,7 @@ function AppRoutes() {
   return (
     <Routes>
       <Route path="/login"      element={user ? <Navigate to="/" /> : <Login />} />
-      <Route path="/"           element={<PrivateRoute><Home /></PrivateRoute>} />
+      <Route path="/"           element={<PrivateRoute><Dashboard /></PrivateRoute>} />
       <Route path="/shipments"  element={<PrivateRoute><Shipments /></PrivateRoute>} />
       <Route path="/scan"       element={<Navigate to="/shipments" />} />
       <Route path="/amazon"     element={<PrivateRoute><AmazonHub /></PrivateRoute>} />
@@ -48,7 +48,7 @@ function AppRoutes() {
 export default function App() {
   return (
     <AuthProvider>
-      <Toaster position="top-center" toastOptions={{ style:{ background:'var(--card)',color:'var(--text)',border:'1px solid var(--border)' } }} />
+      <Toaster position="top-center" toastOptions={{ style:{ background:'var(--card)',color:'#e2e8f0',border:'1px solid var(--border)' } }} />
       <AppRoutes />
     </AuthProvider>
   );

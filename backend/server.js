@@ -29,7 +29,6 @@ app.use('/api/amazon',     require('./routes/amazon'));
 app.use('/api/scan',       require('./routes/scan'));
 app.use('/api/shipments',  require('./routes/shipments'));
 app.use('/api/settings',   require('./routes/settings'));
-app.use('/api/home',       require('./routes/home'));
 
 if (process.env.NODE_ENV === 'production') {
   app.use(express.static(path.join(__dirname, '../frontend/dist')));
