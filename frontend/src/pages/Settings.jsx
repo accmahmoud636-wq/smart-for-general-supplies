@@ -375,7 +375,7 @@ function DataTab() {
 
 function ResetCard() {
   const [counts, setCounts] = useState(null);
-  const [pick, setPick] = useState({ products: true, movements: true, shipments: true, amazon: true });
+  const [pick, setPick] = useState({ products: false, movements: false, shipments: false, amazon: false, sales: false, purchases: false, expenses: false });
   const [word, setWord] = useState('');
   const [busy, setBusy] = useState(false);
   const load = () => api.get('/admin/counts').then(r => setCounts(r.data)).catch(() => {});
@@ -389,7 +389,7 @@ function ResetCard() {
   return (
     <Card style={{ borderColor: '#ef444466' }}>
       <div style={{ fontWeight: 800, fontSize: 16, color: '#f87171', marginBottom: 6 }}>🗑️ تصفير البيانات</div>
-      <div style={{ fontSize: 13, color: C.sub, marginBottom: 12 }}>المسح نهائي ومش بيرجع. الفواتير والمصروفات والمستخدمين والموظفين والإعدادات مش بيتمسحوا.</div>
+      <div style={{ fontSize: 13, color: C.sub, marginBottom: 12 }}>المسح نهائي ومش بيرجع. علّم بس على اللي عايز تمسحه. المستخدمين والموظفين والإعدادات مش بيتمسحوا أبداً.</div>
       {counts && Object.entries(counts).map(([k, c]) => (
         <label key={k} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', fontSize: 14, cursor: 'pointer' }}>
           <input type="checkbox" checked={!!pick[k]} onChange={e => setPick({ ...pick, [k]: e.target.checked })} />

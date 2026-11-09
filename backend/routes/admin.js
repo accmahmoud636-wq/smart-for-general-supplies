@@ -2,7 +2,7 @@
 // إدارة البيانات: تصفير + استيراد الأصناف من Excel/CSV
 // ═══════════════════════════════════════════════════════════════
 const router = require('express').Router();
-const { Product, Category, Supplier, StockMovement } = require('../models/index');
+const { Product, Category, Supplier, StockMovement, Sale, Purchase, Expense } = require('../models/index');
 const { Shipment } = require('../models/shipment');
 const { AmazonOrder, AmazonTransaction, AmazonSkuMap } = require('../models/amazon');
 const { auth, permit, superAdmin } = require('../middleware/auth');
@@ -14,6 +14,9 @@ const SCOPES = {
   movements: { label: 'حركات المخزون',           models: [StockMovement] },
   shipments: { label: 'الشحنات',                 models: [Shipment] },
   amazon:    { label: 'بيانات أمازون وربط SKU',   models: [AmazonOrder, AmazonTransaction, AmazonSkuMap] },
+  sales:     { label: 'فواتير البيع',              models: [Sale] },
+  purchases: { label: 'فواتير الشراء',             models: [Purchase] },
+  expenses:  { label: 'المصروفات',                models: [Expense] },
 };
 
 router.get('/counts', auth, superAdmin, async (req, res) => {
