@@ -14,18 +14,29 @@ export const BASES = {
   gray:  { label: 'رمادي', bg: '#18181b', card: '#27272a', border: '#3f3f46', sidebar: '#111113' },
   green: { label: 'زيتي',  bg: '#0b1712', card: '#14261e', border: '#24443a', sidebar: '#07110d' },
 };
+// الوضع الفاتح — كل جهاز يختار فاتح أو غامق من زرار ☀️/🌙
+const LIGHT = { bg: '#f4f6fa', card: '#ffffff', border: '#e2e8f0', sidebar: '#ffffff', text: '#0f172a', sub: '#475569', muted: '#94a3b8', hover: '#0f172a0a', light: true };
+const DARK_TEXT = { text: '#e2e8f0', sub: '#94a3b8', muted: '#64748b', hover: '#ffffff0d', light: false };
+export const MODE_KEY = 'erp_mode';
+export function getMode() { try { return localStorage.getItem(MODE_KEY) === 'light' ? 'light' : 'dark'; } catch { return 'dark'; } }
+export function setMode(m) { try { localStorage.setItem(MODE_KEY, m); } catch { /* */ } window.location.reload(); }
 export const THEME_KEY = 'erp_theme';
-export function themeColors(t = {}) {
-  const a = ACCENTS[t.accent] || ACCENTS.violet, b = BASES[t.base] || BASES.navy;
-  return { bg: b.bg, card: b.card, border: b.border, sidebar: b.sidebar, accent: a.accent, accent2: a.accent2, accentLight: a.light };
+export function themeColors(t = {}, mode = 'dark') {
+  const a = ACCENTS[t.accent] || ACCENTS.violet;
+  const b = mode === 'light' ? LIGHT : { ...(BASES[t.base] || BASES.navy), ...DARK_TEXT };
+  // في الفاتح: لون النص المختار يبقى الغامق عشان يتقري
+  return { bg: b.bg, card: b.card, border: b.border, sidebar: b.sidebar, text: b.text, sub: b.sub, muted: b.muted, hover: b.hover, isLight: b.light,
+    accent: a.accent, accent2: a.accent2, accentLight: mode === 'light' ? a.accent : a.light };
 }
 let savedTheme = {};
 try { savedTheme = JSON.parse(localStorage.getItem(THEME_KEY)) || {}; } catch { /* */ }
-export const THEME = { appName: 'SMART FOR TRADING', appSub: 'نظام الإدارة', ...savedTheme };
-const C = { muted: '#64748b', text: '#e2e8f0', sub: '#94a3b8', ...themeColors(savedTheme) };
+export const THEME = { appName: 'SMART FOR TRADING', appSub: 'نظام الإدارة', currency: 'ج.م', ...savedTheme };
+const C = { ...themeColors(savedTheme, getMode()) };
 try {   // نفس الألوان كمتغيرات CSS عشان كل الصفحات تتلون
   const r = document.documentElement.style;
   r.setProperty('--bg', C.bg); r.setProperty('--card', C.card); r.setProperty('--border', C.border);
+  r.setProperty('--text', C.text); r.setProperty('--sub', C.sub); r.setProperty('--muted', C.muted); r.setProperty('--hover', C.hover); r.setProperty('--sidebar', C.sidebar);
+  r.setProperty('color-scheme', C.isLight ? 'light' : 'dark');
   r.setProperty('--accent', C.accent); r.setProperty('--accent2', C.accent2); r.setProperty('--accent-light', C.accentLight);
   document.body.style.background = C.bg;
 } catch { /* */ }
@@ -109,7 +120,7 @@ export function Table({ columns, data, onRow }) {
             <tr><td colSpan={columns.length} style={{ textAlign: 'center', padding: 40, color: C.muted }}>لا توجد بيانات</td></tr>
           ) : data.map((row, i) => (
             <tr key={row._id || i} onClick={() => onRow?.(row)} style={{ borderBottom: `1px solid ${C.border}22`, cursor: onRow ? 'pointer' : 'default', transition: 'background .15s' }}
-              onMouseEnter={e => e.currentTarget.style.background = '#ffffff08'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+              onMouseEnter={e => e.currentTarget.style.background = 'var(--hover)'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
               {columns.map(col => (
                 <td key={col.key} style={{ padding: '11px 14px', color: C.text, whiteSpace: 'nowrap' }}>
                   {col.render ? col.render(row[col.key], row) : row[col.key] ?? '—'}
@@ -140,12 +151,12 @@ export function StatCard({ label, value, icon, color = '#6366f1', sub }) {
 
 export function PageHeader({ title, icon, actions }) {
   return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, gap: 10, flexWrap: 'wrap' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         <span style={{ fontSize: 22 }}>{icon}</span>
         <span style={{ fontWeight: 800, fontSize: 20 }}>{title}</span>
       </div>
-      <div style={{ display: 'flex', gap: 8 }}>{actions}</div>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>{actions}</div>
     </div>
   );
 }

@@ -1,12 +1,12 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import api from '../utils/api';
-import { Card, Btn, Badge, Input, Table, PageHeader, StatCard, fmt, fmtDate, C_THEME as C } from '../components/UI';
+import { Card, Btn, Badge, Input, Table, PageHeader, StatCard, fmt, fmtDate, C_THEME as C, THEME } from '../components/UI';
 import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 
-const CUR = 'ج.م';
+const CUR = THEME.currency || 'ج.م';
 const money = (v) => <span style={{ color: v < 0 ? '#f87171' : C.text, fontWeight: 600 }}>{fmt(v)}</span>;
 
 const STAGES = {
@@ -15,7 +15,7 @@ const STAGES = {
   shipped:   { label: 'تم الشحن',    color: '#f59e0b' },
   delivered: { label: 'تم التسليم',  color: '#10b981' },
   returned:  { label: 'مرتجع',       color: '#ef4444' },
-  cancelled: { label: 'ملغي',        color: '#64748b' },
+  cancelled: { label: 'ملغي',        color: 'var(--muted)' },
 };
 
 const RECON = {
@@ -24,7 +24,7 @@ const RECON = {
   pending:           { label: 'بانتظار التسوية',     color: '#3b82f6' },
   overdue:           { label: 'متأخر +21 يوم',       color: '#f97316' },
   refunded:          { label: 'مسترجع',             color: '#a855f7' },
-  cancelled:         { label: 'ملغي',               color: '#64748b' },
+  cancelled:         { label: 'ملغي',               color: 'var(--muted)' },
   cancelled_charged: { label: 'ملغي وعليه حركة',     color: '#eab308' },
 };
 
@@ -32,7 +32,7 @@ const LEVELS = {
   urgent: { label: 'اطلب الآن', color: '#ef4444' },
   soon:   { label: 'قريباً',    color: '#f59e0b' },
   ok:     { label: 'كافي',      color: '#10b981' },
-  slow:   { label: 'بدون مبيعات', color: '#64748b' },
+  slow:   { label: 'بدون مبيعات', color: 'var(--muted)' },
 };
 
 const TABS = [
@@ -319,7 +319,7 @@ function ReorderTab() {
           <div style={{ width: 150 }}><Input label="مدة التوريد (يوم)" type="number" value={p.lead} onChange={v => setP({ ...p, lead: v })} /></div>
           <div style={{ width: 150 }}><Input label="تغطية بعد الوصول (يوم)" type="number" value={p.cover} onChange={v => setP({ ...p, cover: v })} /></div>
           <div style={{ marginBottom: 14 }}><Btn onClick={load}>🔄 احسب</Btn></div>
-          <div style={{ marginBottom: 14, marginRight: 'auto', fontSize: 13, color: C.sub }}>إجمالي تكلفة الشراء المقترح: <b style={{ color: '#fff' }}>{fmt(totalCost)} {CUR}</b></div>
+          <div style={{ marginBottom: 14, marginRight: 'auto', fontSize: 13, color: C.sub }}>إجمالي تكلفة الشراء المقترح: <b style={{ color: 'var(--text)' }}>{fmt(totalCost)} {CUR}</b></div>
         </div>
         <div style={{ fontSize: 11, color: C.muted }}>الكمية المقترحة = المعدل اليومي × (مدة التوريد + التغطية) − المخزون الحالي</div>
       </Card>

@@ -69,7 +69,7 @@ export default function LabelModal({ open, onClose, products = [], initial = {} 
       </div>
 
       <div style={{ display: 'flex', gap: 8, justifyContent: 'space-between', alignItems: 'center', marginTop: 14 }}>
-        <span style={{ fontSize: 13, color: C.sub }}>إجمالي الاستيكرات: <b style={{ color: '#fff' }}>{total}</b></span>
+        <span style={{ fontSize: 13, color: C.sub }}>إجمالي الاستيكرات: <b style={{ color: 'var(--text)' }}>{total}</b></span>
         <div style={{ display: 'flex', gap: 8 }}>
           <Btn variant="ghost" onClick={onClose}>إلغاء</Btn>
           <Btn onClick={doPrint} disabled={!total}>🖨️ طباعة</Btn>
