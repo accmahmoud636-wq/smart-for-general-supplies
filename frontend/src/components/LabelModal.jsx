@@ -25,14 +25,14 @@ export default function LabelModal({ open, onClose, products = [], initial = {} 
     try { localStorage.setItem(SIZE_KEY, size); } catch { /* */ }
     const items = products.filter(p => copies[p._id] > 0).map(p => ({ name: p.name, barcode: p.barcode, price: p.sellPrice, copies: +copies[p._id] }));
     const noCode = items.filter(i => !i.barcode).length;
-    if (noCode) toast.error(`${noCode} منتج بدون باركود — اضغط "توليد باركود للكل" الأول`);
+    if (noCode) toast.error(`${noCode} صنف دون باركود — يُرجى توليد الباركود أولاً`);
     if (printLabels(items, size, { showName, showPrice })) onClose();
   };
 
   const inp = { background: 'var(--bg)', border: `1px solid ${C.border}`, borderRadius: 6, padding: '6px 8px', color: C.text, fontSize: 13 };
 
   return (
-    <Modal open={open} onClose={onClose} title="🏷️ طباعة باركود" width={720}>
+    <Modal open={open} onClose={onClose} title="طباعة ملصقات الباركود" width={720}>
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', marginBottom: 12 }}>
         <select value={size} onChange={e => setSize(e.target.value)} style={inp}>
           {Object.entries(LABEL_SIZES).map(([k, s]) => <option key={k} value={k}>{s.label}</option>)}
@@ -50,9 +50,9 @@ export default function LabelModal({ open, onClose, products = [], initial = {} 
       )}
 
       <div style={{ display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap' }}>
-        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="🔍 بحث" style={{ ...inp, flex: 1, minWidth: 160 }} />
-        <Btn size="sm" variant="ghost" onClick={() => setAll(() => 1)}>1 لكل صنف</Btn>
-        <Btn size="sm" variant="ghost" onClick={() => setAll(p => Math.max(0, p.stock || 0))}>بعدد المخزون</Btn>
+        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="بحث" style={{ ...inp, flex: 1, minWidth: 160 }} />
+        <Btn size="sm" variant="ghost" onClick={() => setAll(() => 1)}>ملصق لكل صنف</Btn>
+        <Btn size="sm" variant="ghost" onClick={() => setAll(p => Math.max(0, p.stock || 0))}>حسب الرصيد</Btn>
         <Btn size="sm" variant="ghost" onClick={() => setAll(() => 0)}>تصفير</Btn>
       </div>
 
@@ -61,7 +61,7 @@ export default function LabelModal({ open, onClose, products = [], initial = {} 
           <div key={p._id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderBottom: `1px solid ${C.border}33` }}>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontWeight: 600, fontSize: 13, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.name}</div>
-              <div style={{ fontSize: 11, color: p.barcode ? C.muted : '#f87171', fontFamily: 'monospace' }}>{p.barcode || 'بدون باركود'} · مخزون {p.stock}</div>
+              <div style={{ fontSize: 11, color: p.barcode ? C.muted : '#f87171', fontFamily: 'monospace' }}>{p.barcode || 'دون باركود'} · الرصيد {p.stock}</div>
             </div>
             <input type="number" min="0" value={copies[p._id] ?? ''} placeholder="0" onChange={e => setCopies({ ...copies, [p._id]: e.target.value })} style={{ ...inp, width: 80, textAlign: 'center' }} />
           </div>
@@ -69,10 +69,10 @@ export default function LabelModal({ open, onClose, products = [], initial = {} 
       </div>
 
       <div style={{ display: 'flex', gap: 8, justifyContent: 'space-between', alignItems: 'center', marginTop: 14 }}>
-        <span style={{ fontSize: 13, color: C.sub }}>إجمالي الاستيكرات: <b style={{ color: 'var(--text)' }}>{total}</b></span>
+        <span style={{ fontSize: 13, color: C.sub }}>إجمالي الملصقات: <b style={{ color: 'var(--text)' }}>{total}</b></span>
         <div style={{ display: 'flex', gap: 8 }}>
           <Btn variant="ghost" onClick={onClose}>إلغاء</Btn>
-          <Btn onClick={doPrint} disabled={!total}>🖨️ طباعة</Btn>
+          <Btn onClick={doPrint} disabled={!total}>طباعة</Btn>
         </div>
       </div>
     </Modal>

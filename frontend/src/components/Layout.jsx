@@ -9,7 +9,7 @@ const SECTIONS = [
   { title: null, items: [
     { path: '/',            icon: '🏠', label: 'الرئيسية',           perm: null },
   ] },
-  { title: 'الشحنات والتسليم', items: [
+  { title: 'العمليات', items: [
     { path: '/shipments',   icon: '📦', label: 'الشحنات والتسليم',   perm: 'shipments:read' },
   ] },
   { title: 'مركز أمازون', items: [
@@ -19,11 +19,11 @@ const SECTIONS = [
   ] },
   { title: 'المخزون', items: [
     { path: '/products',    icon: '🏷️', label: 'المنتجات',           perm: 'products:read' },
-    { path: '/amazon?tab=skus',    icon: '🔗', label: 'ربط SKU أمازون',  perm: 'products' },
+    { path: '/amazon?tab=skus',    icon: '🔗', label: 'ربط رموز SKU',  perm: 'products' },
     { path: '/stock',       icon: '📋', label: 'حركة المخزون',       perm: 'stock:read' },
     { path: '/amazon?tab=reorder', icon: '🔄', label: 'إعادة الطلب',     perm: 'amazon:read' },
     { path: '/purchases',   icon: '📥', label: 'فواتير الشراء',      perm: 'purchases:read' },
-    { path: '/suppliers',   icon: '🏭', label: 'الموردين',           perm: 'suppliers:read' },
+    { path: '/suppliers',   icon: '🏭', label: 'الموردون',           perm: 'suppliers:read' },
     { path: '/reports/inventory', icon: '📦', label: 'تقارير المخزون', perm: 'reports:read' },
   ] },
   { title: 'الحسابات', items: [
@@ -32,9 +32,10 @@ const SECTIONS = [
     { path: '/reports',     icon: '📈', label: 'التقارير المالية',    perm: 'reports:read' },
   ] },
   { title: 'الإعدادات', items: [
-    { path: '/settings?tab=employees', icon: '👤', label: 'الموظفين',          perm: 'settings:read' },
-    { path: '/settings?tab=users',     icon: '🔐', label: 'المستخدمين والصلاحيات', perm: 'all' },
-    { path: '/settings?tab=theme',     icon: '🎨', label: 'المظهر والألوان',    perm: 'settings:read' },
+    { path: '/settings?tab=employees', icon: '👤', label: 'الموظفون',          perm: 'settings:read' },
+    { path: '/settings?tab=data',      icon: '🗂️', label: 'إدارة البيانات',      perm: 'products' },
+    { path: '/settings?tab=users',     icon: '🔐', label: 'المستخدمون والصلاحيات', perm: 'all' },
+    { path: '/settings?tab=theme',     icon: '🎨', label: 'المظهر',    perm: 'settings:read' },
   ] },
 ];
 
@@ -53,9 +54,9 @@ export default function Layout({ children }) {
   useEffect(() => { setDrawer(false); }, [loc.pathname, loc.search]);
   const mode = getMode();
   const ModeBtn = ({ full }) => (
-    <button onClick={() => setMode(mode === 'light' ? 'dark' : 'light')} title="فاتح / غامق"
+    <button onClick={() => setMode(mode === 'light' ? 'dark' : 'light')} title="الوضع الفاتح / الداكن"
       style={{ width: full ? '100%' : 'auto', background: 'transparent', border: `1px solid ${C.border}`, borderRadius: 6, padding: '6px 10px', color: C.sub, fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-      <span>{mode === 'light' ? '🌙' : '☀️'}</span>{full && !collapsed && (mode === 'light' ? 'الوضع الغامق' : 'الوضع الفاتح')}
+      <span>{mode === 'light' ? '🌙' : '☀️'}</span>{full && !collapsed && (mode === 'light' ? 'الوضع الداكن' : 'الوضع الفاتح')}
     </button>
   );
   const [closed, setClosed] = useState(() => { try { return JSON.parse(localStorage.getItem(COLLAPSE_KEY)) || {}; } catch { return {}; } });

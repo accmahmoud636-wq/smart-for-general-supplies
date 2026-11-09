@@ -26,7 +26,6 @@ app.use('/api/stock',      stockRouter);
 app.use('/api/reports',    reportsRouter);
 
 app.use('/api/amazon',     require('./routes/amazon'));
-app.use('/api/scan',       require('./routes/scan'));
 app.use('/api/shipments',  require('./routes/shipments'));
 app.use('/api/settings',   require('./routes/settings'));
 app.use('/api/home',       require('./routes/home'));

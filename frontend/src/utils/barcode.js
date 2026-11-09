@@ -15,11 +15,11 @@ export function barcodeSVG(code, opts = {}) {
 
 // مقاسات الاستيكر — الطابعات الحرارية بتطبع استيكر لكل صفحة
 export const LABEL_SIZES = {
-  '50x25': { label: 'استيكر 50×25 مم (حراري)', w: 50, h: 25 },
-  '40x30': { label: 'استيكر 40×30 مم (حراري)', w: 40, h: 30 },
-  '38x25': { label: 'استيكر 38×25 مم (حراري)', w: 38, h: 25 },
-  '60x40': { label: 'استيكر 60×40 مم (حراري)', w: 60, h: 40 },
-  'a4':    { label: 'ورقة A4 — 24 استيكر (3×8)', w: 70, h: 37, sheet: true },
+  '50x25': { label: 'ملصق 50×25 مم (حراري)', w: 50, h: 25 },
+  '40x30': { label: 'ملصق 40×30 مم (حراري)', w: 40, h: 30 },
+  '38x25': { label: 'ملصق 38×25 مم (حراري)', w: 38, h: 25 },
+  '60x40': { label: 'ملصق 60×40 مم (حراري)', w: 60, h: 40 },
+  'a4':    { label: 'ورقة A4 — 24 ملصقاً (3×8)', w: 70, h: 37, sheet: true },
 };
 
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -58,7 +58,7 @@ export function printLabels(items, sizeKey = '50x25', { showName = true, showPri
   <script>window.onload = () => { setTimeout(() => { window.print(); }, 300); };<\/script></body></html>`;
 
   const w = window.open('', '_blank', 'width=800,height=600');
-  if (!w) { alert('المتصفح منع النافذة — اسمح بالـ Popups للموقع'); return false; }
+  if (!w) { alert('منع المتصفح فتح نافذة الطباعة — يُرجى السماح بالنوافذ المنبثقة لهذا الموقع'); return false; }
   w.document.open(); w.document.write(html); w.document.close();
   return true;
 }

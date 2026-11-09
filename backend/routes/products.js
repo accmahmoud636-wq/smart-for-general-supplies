@@ -150,7 +150,7 @@ prodRouter.post('/', auth, permit('products'), async (req, res) => {
   try {
     const body = { ...req.body, barcode: String(req.body.barcode || '').trim() };
     if (!body.barcode) body.barcode = (await nextBarcodes(1))[0];          // باركود تلقائي
-    else if (await barcodeTaken(body.barcode)) return res.status(400).json({ message: 'الباركود مستخدم لمنتج تاني' });
+    else if (await barcodeTaken(body.barcode)) return res.status(400).json({ message: 'الباركود مستخدم لصنف آخر' });
     res.status(201).json(await Product.create(body));
   }
   catch(e){ res.status(400).json({ message: e.message }); }
@@ -161,7 +161,7 @@ prodRouter.put('/:id', auth, permit('products'), async (req, res) => {
     const body = { ...req.body };
     if (body.barcode !== undefined) {
       body.barcode = String(body.barcode || '').trim();
-      if (await barcodeTaken(body.barcode, req.params.id)) return res.status(400).json({ message: 'الباركود مستخدم لمنتج تاني' });
+      if (await barcodeTaken(body.barcode, req.params.id)) return res.status(400).json({ message: 'الباركود مستخدم لصنف آخر' });
     }
     res.json(await Product.findByIdAndUpdate(req.params.id, body, { new: true }));
   } catch(e){ res.status(400).json({ message: e.message }); }
@@ -169,7 +169,7 @@ prodRouter.put('/:id', auth, permit('products'), async (req, res) => {
 
 prodRouter.delete('/:id', auth, permit('products'), async (req, res) => {
   await Product.findByIdAndUpdate(req.params.id, { active: false });
-  res.json({ message: 'تم الأرشفة' });
+  res.json({ message: 'تمت الأرشفة' });
 });
 
 // Stock adjustment
@@ -182,7 +182,7 @@ prodRouter.post('/:id/adjust', auth, permit('stock'), async (req, res) => {
     product.stock = after;
     await product.save();
     await StockMovement.create({ product: product._id, type: qty > 0 ? 'in' : 'out', qty: Math.abs(qty), before, after, reason: reason || 'تسوية يدوية', createdBy: req.user._id });
-    res.json({ message: 'تم التسوية', stock: after });
+    res.json({ message: 'تمت التسوية', stock: after });
   } catch(e){ res.status(400).json({ message: e.message }); }
 });
 

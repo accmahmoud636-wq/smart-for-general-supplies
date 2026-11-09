@@ -9,12 +9,12 @@ const PERMISSIONS = [
   { key: 'categories', label: 'الفئات',                group: 'المخزون' },
   { key: 'stock',      label: 'حركة المخزون والتسويات', group: 'المخزون' },
   { key: 'purchases',  label: 'فواتير الشراء',          group: 'المخزون' },
-  { key: 'suppliers',  label: 'الموردين',               group: 'المخزون' },
+  { key: 'suppliers',  label: 'الموردون',               group: 'المخزون' },
   { key: 'sales',      label: 'فواتير البيع',           group: 'الحسابات' },
   { key: 'customers',  label: 'العملاء',               group: 'الحسابات' },
   { key: 'expenses',   label: 'المصروفات',             group: 'الحسابات' },
   { key: 'reports',    label: 'التقارير',              group: 'الحسابات' },
-  { key: 'settings',   label: 'الإعدادات (الموظفين والمظهر)', group: 'الإعدادات' },
+  { key: 'settings',   label: 'الإعدادات (الموظفون والمظهر)', group: 'الإعدادات' },
 ];
 
 const ROLES = {

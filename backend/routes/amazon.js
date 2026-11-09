@@ -143,7 +143,7 @@ async function postOrderGroup(orderId, items, resolve, userId, { deductStock = t
   const prods = items.map(i => resolve(i.sku, i.asin));
   const missing = items.filter((_, k) => !prods[k]).map(i => i.sku);
   if (missing.length) return { reason: 'SKU غير مربوط: ' + missing.join(', ') };
-  if (items.some(i => i.sale)) return { reason: 'الطلب مرحّل قبل كده' };
+  if (items.some(i => i.sale)) return { reason: 'تم ترحيل الطلب مسبقاً' };
   // لو السعر مش موجود في التقرير ناخد سعر البيع من صفحة المنتجات
   const lineTotal = (i, k) => i.itemPrice || r2((prods[k].sellPrice || 0) * i.qty);
 
@@ -333,7 +333,7 @@ router.put('/orders/stage', auth, permit('amazon'), async (req, res) => {
       o.stage = stage;
       await o.save();
     }
-    res.json({ message: `تم تحديث ${orders.length} سطر` + (restocked ? ` — رجوع ${restocked} للمخزون` : '') });
+    res.json({ message: `تم تحديث ${orders.length} سطر` + (restocked ? ` — إعادة ${restocked} إلى المخزون` : '') });
   } catch (e) { res.status(400).json({ message: e.message }); }
 });
 
@@ -351,7 +351,7 @@ router.post('/orders/post-sales', auth, permit('amazon'), async (req, res) => {
       const r = await postOrderGroup(orderId, items, resolve, req.user._id, { deductStock: req.body.deductStock !== false });
       if (r.reason) skipped.push({ orderId, reason: r.reason }); else posted++;
     }
-    res.json({ message: `تم ترحيل ${posted} طلب لفواتير بيع` + (skipped.length ? ` — ${skipped.length} متوقف` : ''), posted, skipped });
+    res.json({ message: `تم ترحيل ${posted} طلب لفواتير بيع` + (skipped.length ? ` — تعذّر ترحيل ${skipped.length}` : ''), posted, skipped });
   } catch (e) { res.status(500).json({ message: e.message }); }
 });
 
@@ -392,10 +392,10 @@ router.post('/skus/map', auth, permit('amazon', 'products'), async (req, res) =>
   try {
     const sku = String(req.body.sku || '').trim();
     const { product, force } = req.body;
-    if (!sku || !product) return res.status(400).json({ message: 'SKU والمنتج مطلوبين' });
+    if (!sku || !product) return res.status(400).json({ message: 'رمز SKU والصنف مطلوبان' });
     const existing = await AmazonSkuMap.findOne({ sku }).populate('product', 'name').lean();
     if (existing && String(existing.product?._id) !== String(product) && !force)
-      return res.status(409).json({ message: `الـ SKU ده مربوط بصنف تاني: ${existing.product?.name || '؟'}`, otherProduct: existing.product?.name });
+      return res.status(409).json({ message: `رمز SKU مرتبط بصنف آخر: ${existing.product?.name || '؟'}`, otherProduct: existing.product?.name });
     await AmazonSkuMap.findOneAndUpdate({ sku }, { sku, product }, { upsert: true });
     await AmazonOrder.updateMany({ sku }, { product });
     res.json({ message: 'تم الربط' });
@@ -516,7 +516,7 @@ router.get('/settlements', auth, permit('amazon', 'amazon:read', 'reports'), asy
     const txs = await AmazonTransaction.find().lean();
     const g = {};
     for (const t of txs) {
-      const id = t.settlementId || '(بدون رقم)';
+      const id = t.settlementId || '(دون رقم)';
       const s = (g[id] ||= { settlementId: id, from: t.date, to: t.date, lines: 0, sales: 0, refunds: 0, fees: 0, otherFees: 0, net: 0, transfer: 0 });
       s.lines++;
       if (t.date && (!s.from || t.date < s.from)) s.from = t.date;

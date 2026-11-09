@@ -29,16 +29,16 @@ router.get('/counts', auth, superAdmin, async (req, res) => {
 
 router.post('/reset', auth, superAdmin, async (req, res) => {
   try {
-    if (req.body.confirm !== 'امسح') return res.status(400).json({ message: 'اكتب كلمة «امسح» للتأكيد' });
+    if (req.body.confirm !== 'حذف') return res.status(400).json({ message: 'يُرجى كتابة كلمة «حذف» للتأكيد' });
     const scopes = (req.body.scopes || []).filter(k => SCOPES[k]);
-    if (!scopes.length) return res.status(400).json({ message: 'اختار حاجة تتمسح' });
+    if (!scopes.length) return res.status(400).json({ message: 'يُرجى تحديد البيانات المطلوب حذفها' });
     const done = {};
     for (const k of scopes) {
       let n = 0;
       for (const m of SCOPES[k].models) n += (await m.deleteMany({})).deletedCount || 0;
       done[k] = n;
     }
-    res.json({ message: '✅ اتمسح: ' + scopes.map(k => `${SCOPES[k].label} (${done[k]})`).join('، '), done });
+    res.json({ message: 'تم حذف: ' + scopes.map(k => `${SCOPES[k].label} (${done[k]})`).join('، '), done });
   } catch (e) { res.status(500).json({ message: e.message }); }
 });
 
@@ -87,7 +87,7 @@ function readProducts(rows) {
 // معاينة: إيه اللي اتفهم من الملف قبل ما يتسجل
 router.post('/products/preview', auth, permit('products'), async (req, res) => {
   const out = readProducts(req.body.rows || []);
-  if (!out) return res.status(400).json({ message: 'مش لاقي عمود اسم الصنف — لازم يبقى فيه عمود اسمه «الاسم» أو «اسم الصنف» أو Name', headers: (req.body.rows?.[0] || []).slice(0, 30) });
+  if (!out) return res.status(400).json({ message: 'لم يُعثر على عمود اسم الصنف — يجب أن يتضمن الملف عموداً بعنوان «اسم الصنف» أو «الاسم» أو Name', headers: (req.body.rows?.[0] || []).slice(0, 30) });
   const existing = await Product.find().select('name sku barcode').lean();
   const key = (p) => [p.sku && 's:' + p.sku.toLowerCase(), p.barcode && 'b:' + p.barcode, 'n:' + p.name.trim().toLowerCase()].filter(Boolean);
   const known = new Set(existing.flatMap(key));
@@ -98,7 +98,7 @@ router.post('/products/preview', auth, permit('products'), async (req, res) => {
 router.post('/products/import', auth, permit('products'), async (req, res) => {
   try {
     const out = readProducts(req.body.rows || []);
-    if (!out) return res.status(400).json({ message: 'مش لاقي عمود اسم الصنف' });
+    if (!out) return res.status(400).json({ message: 'لم يُعثر على عمود اسم الصنف' });
     const cats = new Map((await Category.find().lean()).map(c => [c.name.trim().toLowerCase(), c._id]));
     const sups = new Map((await Supplier.find().lean()).map(s => [s.name.trim().toLowerCase(), s._id]));
     const catId = async (n) => { if (!n) return undefined; const k = n.toLowerCase(); if (!cats.has(k)) cats.set(k, (await Category.create({ name: n }))._id); return cats.get(k); };
@@ -157,7 +157,7 @@ router.post('/products/import', auth, permit('products'), async (req, res) => {
         for (const we of e.writeErrors || []) {
           const it = opRow[i + we.index];
           if (ops[i + we.index].insertOne) created--; else updated--;
-          errors.push({ row: it?.row, name: it?.name, message: we.code === 11000 ? 'SKU أو باركود مكرر مع صنف تاني' : (we.errmsg || 'خطأ') });
+          errors.push({ row: it?.row, name: it?.name, message: we.code === 11000 ? 'رمز SKU أو الباركود مستخدم لصنف آخر' : (we.errmsg || 'خطأ') });
         }
         if (!e.writeErrors) throw e;
       }
@@ -165,7 +165,7 @@ router.post('/products/import', auth, permit('products'), async (req, res) => {
     for (let i = 0; i < moves.length; i += 1000) await StockMovement.insertMany(moves.slice(i, i + 1000));
     let mapped = 0;
     for (let i = 0; i < mapOps.length; i += 1000) { await AmazonSkuMap.bulkWrite(mapOps.slice(i, i + 1000), { ordered: false }); mapped += Math.min(1000, mapOps.length - i); }
-    res.json({ message: `✅ ${created} صنف جديد، ${updated} اتحدّث${mapped ? `، ${mapped} SKU أمازون اتربط` : ''}${errors.length ? ` — ${errors.length} سطر فيه مشكلة` : ''}`, created, updated, mapped, errors });
+    res.json({ message: `تمت إضافة ${created} صنف وتحديث ${updated}${mapped ? ` وربط ${mapped} رمز SKU` : ''}${errors.length ? ` — ${errors.length} سطر يحتوي على أخطاء` : ''}`, created, updated, mapped, errors });
   } catch (e) { res.status(500).json({ message: e.message }); }
 });
 

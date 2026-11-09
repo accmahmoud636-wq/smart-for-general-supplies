@@ -41,14 +41,14 @@ export default function Products() {
   const filtered = products.filter(p => !search || p.name?.toLowerCase().includes(search.toLowerCase()) || p.sku?.toLowerCase().includes(search.toLowerCase()) || p.asin?.toLowerCase().includes(search.toLowerCase()) || p.barcode?.includes(search) || maps.some(m => m.product === p._id && m.sku.toLowerCase().includes(search.toLowerCase())));
 
   const skusOf = (id) => maps.filter(m => m.product === id).map(m => m.sku);
-  const nameOf = (id) => products.find(p => p._id === id)?.name || 'صنف تاني';
+  const nameOf = (id) => products.find(p => p._id === id)?.name || 'صنف آخر';
 
   const addSku = () => {
     const v = skuInput.trim();
     if (!v) return;
     if (skus.some(x => x.toLowerCase() === v.toLowerCase())) { toast.error('موجود بالفعل'); return; }
     const other = maps.find(m => m.sku.toLowerCase() === v.toLowerCase() && m.product !== editing);
-    if (other && !confirm(`الـ SKU «${v}» مربوط بـ «${nameOf(other.product)}». تنقله للصنف ده؟`)) return;
+    if (other && !confirm(`رمز SKU «${v}» مرتبط بالصنف «${nameOf(other.product)}». هل تريد نقله إلى هذا الصنف؟`)) return;
     if (other) setMoveSkus(x => [...x, v]);
     setSkus(x => [...x, v]); setSkuInput('');
   };
@@ -71,7 +71,7 @@ export default function Products() {
       if (editing) await api.put(`/products/${editing}`, form);
       else id = (await api.post('/products', form)).data._id;
       await syncSkus(id);
-      toast.success(editing ? 'تم التحديث' : 'تم الإضافة');
+      toast.success(editing ? 'تم التحديث' : 'تمت الإضافة');
       setModal(false); load();
     } catch(e) { toast.error(e.response?.data?.message || 'خطأ'); }
   };
@@ -82,7 +82,7 @@ export default function Products() {
   };
 
   const generateAll = async () => {
-    if (!confirm('توليد باركود لكل المنتجات اللي ملهاش باركود؟')) return;
+    if (!confirm('توليد باركود لجميع الأصناف التي لا تملك باركود؟')) return;
     try { const r = await api.post('/products/barcodes/generate'); toast.success(r.data.message); load(); }
     catch(e) { toast.error(e.response?.data?.message || 'خطأ'); }
   };
@@ -90,7 +90,7 @@ export default function Products() {
   const adjust = async () => {
     try {
       await api.post(`/products/${adjustModal._id}/adjust`, { qty: Number(adjustQty), reason: adjustReason });
-      toast.success('تم التسوية');
+      toast.success('تمت التسوية');
       setAdjustModal(null); setAdjustQty(''); setAdjustReason(''); load();
     } catch(e) { toast.error(e.response?.data?.message || 'خطأ'); }
   };
@@ -114,24 +114,24 @@ export default function Products() {
   return (
     <div>
       <PageHeader title="المنتجات" icon="📦" actions={[
-        can('products') && <Btn key="imp" variant="ghost" onClick={() => window.location.assign('/settings?tab=data')}>⬆️ استيراد Excel</Btn>,
-        <Btn key="lbl" variant="ghost" onClick={() => setLabels({})}>🏷️ طباعة باركود</Btn>,
-        can('products') && <Btn key="gen" variant="ghost" onClick={generateAll}>▮▯▮ توليد باركود للكل</Btn>,
+        can('products') && <Btn key="imp" variant="ghost" onClick={() => window.location.assign('/settings?tab=data')}>استيراد من Excel</Btn>,
+        <Btn key="lbl" variant="ghost" onClick={() => setLabels({})}>طباعة الباركود</Btn>,
+        can('products') && <Btn key="gen" variant="ghost" onClick={generateAll}>توليد الباركود</Btn>,
         can('products') && <Btn key="add" onClick={openNew}>+ إضافة منتج</Btn>
       ]} />
 
       <Card style={{ marginBottom: 16 }}>
         <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="🔍 بحث بالاسم، SKU، ASIN..."
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="بحث بالاسم أو SKU أو ASIN أو الباركود"
             style={{ flex: 1, minWidth: 200, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 12px', color: 'var(--text)', fontSize: 14, outline: 'none' }} />
           <Btn variant="ghost" onClick={() => setCam('search')}>📷</Btn>
           <div style={{ fontSize: 13, color: 'var(--muted)' }}>{filtered.length} منتج</div>
-          <div style={{ fontSize: 13, color: '#ef4444' }}>{filtered.filter(p => p.stock <= p.minStock).length} منخفض المخزون</div>
+          <div style={{ fontSize: 13, color: '#ef4444' }}>{filtered.filter(p => p.stock <= p.minStock).length} تحت حد الطلب</div>
         </div>
       </Card>
 
       <Card>
-        {loading ? <div style={{ textAlign: 'center', padding: 40, color: 'var(--muted)' }}>تحميل...</div> : <Table columns={columns} data={filtered} />}
+        {loading ? <div style={{ textAlign: 'center', padding: 40, color: 'var(--muted)' }}>جارٍ التحميل...</div> : <Table columns={columns} data={filtered} />}
       </Card>
 
       {/* Add/Edit Modal */}
@@ -141,23 +141,23 @@ export default function Products() {
           <Input label="SKU" value={form.sku} onChange={v => setForm({...form,sku:v})} placeholder="EL-001" />
           <Input label="Amazon ASIN" value={form.asin} onChange={v => setForm({...form,asin:v})} placeholder="B08XXXXX" />
           <div style={{ gridColumn: '1/-1', display: 'flex', gap: 8, alignItems: 'flex-end' }}>
-            <div style={{ flex: 1 }}><Input label="الباركود (سيبه فاضي = يتولد تلقائي، أو امسح باركود المصنع بالاسكانر)" value={form.barcode} onChange={v => setForm({...form,barcode:v})} placeholder="200000000001X" /></div>
-            <div style={{ marginBottom: 14, display: 'flex', gap: 6 }}><Btn variant="ghost" onClick={() => setCam('form')}>📷</Btn><Btn variant="ghost" onClick={newBarcode}>🎲 توليد</Btn></div>
+            <div style={{ flex: 1 }}><Input label="الباركود (يُولَّد تلقائياً عند تركه فارغاً، أو امسح باركود المصنّع)" value={form.barcode} onChange={v => setForm({...form,barcode:v})} placeholder="200000000001X" /></div>
+            <div style={{ marginBottom: 14, display: 'flex', gap: 6 }}><Btn variant="ghost" onClick={() => setCam('form')}>📷</Btn><Btn variant="ghost" onClick={newBarcode}>توليد</Btn></div>
           </div>
           <div style={{ gridColumn: '1/-1', marginBottom: 14, padding: 12, border: '1px dashed var(--border)', borderRadius: 10 }}>
-            <label style={{ display: 'block', fontSize: 12, color: 'var(--sub)', marginBottom: 6, fontWeight: 600 }}>🔗 SKUs أمازون للصنف ده (كل إعلان ليه SKU — ضيفهم كلهم هنا)</label>
+            <label style={{ display: 'block', fontSize: 12, color: 'var(--sub)', marginBottom: 6, fontWeight: 600 }}>رموز SKU لإعلانات أمازون الخاصة بهذا الصنف</label>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
-              {form.sku && <Badge color="#64748b">{form.sku} (SKU الصنف)</Badge>}
+              {form.sku && <Badge color="#64748b">{form.sku} (الرمز الأساسي)</Badge>}
               {skus.map(x => (
                 <span key={x} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: '#f59e0b22', color: '#fbbf24', border: '1px solid #f59e0b44', borderRadius: 20, padding: '3px 6px 3px 10px', fontSize: 12, fontFamily: 'monospace' }}>
                   {x}{moveSkus.includes(x) && ' ↩'}
                   <button onClick={() => setSkus(skus.filter(y => y !== x))} style={{ background: 'none', border: 'none', color: '#f87171', cursor: 'pointer', fontSize: 14, lineHeight: 1 }}>×</button>
                 </span>
               ))}
-              {!skus.length && !form.sku && <span style={{ fontSize: 12, color: 'var(--muted)' }}>مفيش SKUs لسه</span>}
+              {!skus.length && !form.sku && <span style={{ fontSize: 12, color: 'var(--muted)' }}>لا توجد رموز مضافة</span>}
             </div>
             <div style={{ display: 'flex', gap: 6 }}>
-              <input value={skuInput} onChange={e => setSkuInput(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addSku(); } }} placeholder="اكتب SKU الإعلان واضغط Enter"
+              <input value={skuInput} onChange={e => setSkuInput(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addSku(); } }} placeholder="أدخل رمز SKU ثم اضغط Enter"
                 style={{ flex: 1, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 12px', color: 'var(--text)', fontSize: 13, outline: 'none', direction: 'ltr' }} />
               <Btn variant="ghost" onClick={addSku}>+ إضافة</Btn>
             </div>
@@ -167,7 +167,7 @@ export default function Products() {
             {can('categories') && <div style={{ marginBottom: 14 }}><Btn variant="ghost" onClick={async () => {
               const name = prompt('اسم الفئة الجديدة:');
               if (!name?.trim()) return;
-              try { const { data } = await api.post('/categories', { name: name.trim() }); setCategories(c => [...c, data]); setForm(f => ({ ...f, category: data._id })); toast.success('اتضافت الفئة'); }
+              try { const { data } = await api.post('/categories', { name: name.trim() }); setCategories(c => [...c, data]); setForm(f => ({ ...f, category: data._id })); toast.success('تمت إضافة الفئة'); }
               catch (e) { toast.error(e.response?.data?.message || 'خطأ'); }
             }}>+ فئة</Btn></div>}
           </div>
@@ -180,11 +180,11 @@ export default function Products() {
         </div>
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 8 }}>
           <Btn variant="ghost" onClick={() => setModal(false)}>إلغاء</Btn>
-          <Btn onClick={save}>💾 حفظ</Btn>
+          <Btn onClick={save}>حفظ</Btn>
         </div>
       </Modal>
 
-      <CameraScanner open={!!cam} onClose={() => setCam('')} title={cam === 'form' ? 'امسح باركود المصنع' : 'دوّر بالباركود'}
+      <CameraScanner open={!!cam} onClose={() => setCam('')} title={cam === 'form' ? 'مسح باركود المصنّع' : 'البحث بالباركود'}
         onScan={code => { if (cam === 'form') setForm(f => ({ ...f, barcode: code })); else setSearch(code); }} />
       <LabelModal open={!!labels} onClose={() => setLabels(null)} products={products} initial={labels || {}} />
 
@@ -198,7 +198,7 @@ export default function Products() {
         <Input label="السبب" value={adjustReason} onChange={setAdjustReason} placeholder="جرد، تلف، هدية..." />
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
           <Btn variant="ghost" onClick={() => setAdjustModal(null)}>إلغاء</Btn>
-          <Btn variant="warning" onClick={adjust}>📦 تطبيق التسوية</Btn>
+          <Btn variant="warning" onClick={adjust}>تطبيق التسوية</Btn>
         </div>
       </Modal>
     </div>

@@ -8,10 +8,10 @@ import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
 
 const TABS = [
-  ['employees', '👤 الموظفين', 'settings:read'],
-  ['users', '🔐 المستخدمين والصلاحيات', 'all'],
-  ['theme', '🎨 المظهر والألوان', 'settings:read'],
-  ['data', '📂 البيانات والاستيراد', 'products'],
+  ['employees', 'الموظفون', 'settings:read'],
+  ['users', 'المستخدمون والصلاحيات', 'all'],
+  ['theme', 'المظهر', 'settings:read'],
+  ['data', 'إدارة البيانات', 'products'],
 ];
 const err = (e) => e.response?.data?.message || e.message || 'خطأ';
 
@@ -20,7 +20,7 @@ export default function Settings() {
   const [sp, setSp] = useSearchParams();
   const tabs = TABS.filter(([, , p]) => can(p) || user?.role === 'superadmin');
   const tab = tabs.some(t => t[0] === sp.get('tab')) ? sp.get('tab') : tabs[0]?.[0];
-  if (!tab) return <div style={{ textAlign: 'center', padding: 80, color: C.muted }}>🔒 غير مصرح بالوصول</div>;
+  if (!tab) return <div style={{ textAlign: 'center', padding: 80, color: C.muted }}>ليس لديك صلاحية الوصول إلى هذه الصفحة</div>;
 
   return (
     <div>
@@ -39,7 +39,7 @@ export default function Settings() {
 }
 
 // ═══ المستخدمين والصلاحيات ════════════════════════════════════
-const LEVELS = [['none', 'ممنوع', '#64748b'], ['read', 'عرض بس', '#3b82f6'], ['full', 'عرض وتعديل', '#10b981']];
+const LEVELS = [['none', 'ممنوع', '#64748b'], ['read', 'عرض فقط', '#3b82f6'], ['full', 'عرض وتعديل', '#10b981']];
 const levelOf = (perms, key) => perms.includes(key) || perms.includes('all') ? 'full' : perms.includes(key + ':read') ? 'read' : 'none';
 const setLevel = (perms, key, lvl) => {
   const out = perms.filter(p => p !== key && p !== key + ':read');
@@ -74,12 +74,12 @@ function UsersPerms() {
       if (!d.password) delete d.password;
       delete d._id;
       if (form._id) await api.put(`/users/${form._id}`, d); else await api.post('/users', d);
-      toast.success('اتحفظ'); setForm(null); load();
+      toast.success('تم الحفظ'); setForm(null); load();
     } catch (e) { toast.error(err(e)); }
   };
   const del = async (u) => {
-    if (!confirm(`تمسح المستخدم ${u.name}؟`)) return;
-    try { await api.delete(`/users/${u._id}`); toast.success('اتمسح'); load(); } catch (e) { toast.error(err(e)); }
+    if (!confirm(`هل تريد حذف المستخدم ${u.name}؟`)) return;
+    try { await api.delete(`/users/${u._id}`); toast.success('تم الحذف'); load(); } catch (e) { toast.error(err(e)); }
   };
 
   const groups = [...new Set(perms.map(p => p.group))];
@@ -88,9 +88,9 @@ function UsersPerms() {
   return (
     <div>
       <Card style={{ marginBottom: 14, fontSize: 13, color: C.sub, lineHeight: 1.9 }}>
-        المستخدم = حد بيدخل المنصة بإيميل وباسورد. كل مستخدم ليه <b>دور</b> بيحدد صلاحياته الافتراضية، وتقدر تخصص صلاحياته
-        صفحة صفحة: <Badge color="#64748b">ممنوع</Badge> <Badge color="#3b82f6">عرض بس</Badge> <Badge color="#10b981">عرض وتعديل</Badge>.
-        <br />الموظفين اللي بيمسحوا كارت الباركود في الشحنات مش لازم يبقوا مستخدمين — دول في تبويب «الموظفين».
+        المستخدم هو من يسجّل الدخول إلى النظام بالبريد الإلكتروني وكلمة المرور. يحدد <b>الدور</b> الصلاحيات الافتراضية، ويمكن تخصيصها
+        لكل صفحة: <Badge color="#64748b">ممنوع</Badge> <Badge color="#3b82f6">عرض فقط</Badge> <Badge color="#10b981">عرض وتعديل</Badge>.
+        <br />موظفو المستودع الذين يمسحون بطاقات الباركود في الشحنات يُداروا من تبويب «الموظفون» ولا يلزم أن يكونوا مستخدمين.
       </Card>
       <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}><Btn onClick={openNew}>+ مستخدم جديد</Btn></div>
       <Card style={{ padding: 0 }}>
@@ -100,7 +100,7 @@ function UsersPerms() {
           { key: 'active', title: 'الحالة', render: v => <Badge color={v ? '#10b981' : '#ef4444'}>{v ? 'نشط' : 'موقوف'}</Badge> },
           { key: 'lastLogin', title: 'آخر دخول', render: v => fmtDate(v) },
           { key: '_id', title: '', render: (_, r) => <div style={{ display: 'flex', gap: 6 }}>
-            <Btn size="sm" variant="ghost" onClick={() => openEdit(r)}>✏️ تعديل وصلاحيات</Btn>
+            <Btn size="sm" variant="ghost" onClick={() => openEdit(r)}>تعديل</Btn>
             {me?.role === 'superadmin' && r._id !== me._id && <Btn size="sm" variant="danger" onClick={() => del(r)}>🗑️</Btn>}
           </div> },
         ]} data={users} />
@@ -110,29 +110,29 @@ function UsersPerms() {
         {form && <>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 12px' }}>
             <Input label="الاسم" value={form.name} onChange={v => setForm({ ...form, name: v })} required />
-            <Input label="الإيميل" type="email" value={form.email} onChange={v => setForm({ ...form, email: v })} required />
-            <Input label={form._id ? 'باسورد جديد (سيبه فاضي لو مش هتغيره)' : 'الباسورد'} type="password" value={form.password} onChange={v => setForm({ ...form, password: v })} required={!form._id} />
+            <Input label="البريد الإلكتروني" type="email" value={form.email} onChange={v => setForm({ ...form, email: v })} required />
+            <Input label={form._id ? 'كلمة مرور جديدة (اتركها فارغة للإبقاء على الحالية)' : 'كلمة المرور'} type="password" value={form.password} onChange={v => setForm({ ...form, password: v })} required={!form._id} />
             <div style={{ marginBottom: 14 }}>
               <label style={{ display: 'block', fontSize: 12, color: C.sub, marginBottom: 5, fontWeight: 600 }}>الحالة</label>
               <select value={form.active ? '1' : '0'} onChange={e => setForm({ ...form, active: e.target.value === '1' })} style={sel}>
-                <option value="1">نشط</option><option value="0">موقوف (مش هيقدر يدخل)</option>
+                <option value="1">نشط</option><option value="0">موقوف (لا يمكنه تسجيل الدخول)</option>
               </select>
             </div>
           </div>
 
           <div style={{ marginBottom: 12 }}>
-            <label style={{ display: 'block', fontSize: 12, color: C.sub, marginBottom: 5, fontWeight: 600 }}>الدور (الصلاحيات الجاهزة)</label>
+            <label style={{ display: 'block', fontSize: 12, color: C.sub, marginBottom: 5, fontWeight: 600 }}>الدور الوظيفي</label>
             <select value={form.role} onChange={e => setForm({ ...form, role: e.target.value, useCustom: false, customPermissions: [] })} style={{ ...sel, width: '100%' }}>
               {roles.filter(r => r.key !== 'superadmin' || me?.role === 'superadmin').map(r => <option key={r.key} value={r.key}>{r.label}</option>)}
             </select>
           </div>
 
           {superForm
-            ? <Card style={{ fontSize: 13, color: '#fbbf24' }}>👑 مدير النظام ليه كل الصلاحيات، ومش بتتخصص.</Card>
+            ? <Card style={{ fontSize: 13, color: '#fbbf24' }}>يمتلك مدير النظام جميع الصلاحيات، ولا يمكن تخصيصها.</Card>
             : <div style={{ border: `1px solid ${C.border}`, borderRadius: 10, overflow: 'hidden' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', background: C.bg }}>
-                  <b style={{ fontSize: 13 }}>الصلاحيات بالتفصيل {form.useCustom ? <Badge color="#f59e0b">مخصصة</Badge> : <Badge color="#64748b">حسب الدور</Badge>}</b>
-                  {form.useCustom && <Btn size="sm" variant="ghost" onClick={resetToRole}>↩️ ارجع لصلاحيات الدور</Btn>}
+                  <b style={{ fontSize: 13 }}>الصلاحيات التفصيلية {form.useCustom ? <Badge color="#f59e0b">مخصصة</Badge> : <Badge color="#64748b">حسب الدور</Badge>}</b>
+                  {form.useCustom && <Btn size="sm" variant="ghost" onClick={resetToRole}>استعادة صلاحيات الدور</Btn>}
                 </div>
                 <div style={{ maxHeight: 340, overflowY: 'auto' }}>
                   {groups.map(g => <div key={g}>
@@ -156,9 +156,9 @@ function UsersPerms() {
 
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 14 }}>
             <Btn variant="ghost" onClick={() => setForm(null)}>إلغاء</Btn>
-            <Btn onClick={save}>💾 حفظ</Btn>
+            <Btn onClick={save}>حفظ</Btn>
           </div>
-          {form._id === me?._id && <div style={{ fontSize: 11, color: C.muted, marginTop: 8 }}>تعديل صلاحياتك بيظهر بعد ما تعمل خروج ودخول.</div>}
+          {form._id === me?._id && <div style={{ fontSize: 11, color: C.muted, marginTop: 8 }}>تُطبَّق التعديلات على صلاحياتك بعد إعادة تسجيل الدخول.</div>}
         </>}
       </Modal>
     </div>
@@ -180,7 +180,7 @@ function Theme() {
     try {
       const { data } = await api.put('/settings/theme', t);
       try { localStorage.setItem(THEME_KEY, JSON.stringify(data)); } catch { /* */ }
-      toast.success('اتحفظ — الشاشة هتتحدث');
+      toast.success('تم الحفظ — جارٍ تحديث الواجهة');
       setTimeout(() => window.location.reload(), 600);
     } catch (e) { toast.error(err(e)); setBusy(false); }
   };
@@ -192,12 +192,12 @@ function Theme() {
   return (
     <div style={{ maxWidth: 820 }}>
       <Card style={{ marginBottom: 14 }}>
-        <div style={{ fontWeight: 700, marginBottom: 12 }}>اسم المنصة والعملة</div>
+        <div style={{ fontWeight: 700, marginBottom: 12 }}>بيانات النظام</div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 12px' }}>
-          <Input label="الاسم (فوق في الشريط الجانبي)" value={t.appName} onChange={v => edit && setT({ ...t, appName: v })} />
-          <Input label="السطر الصغير تحته" value={t.appSub} onChange={v => edit && setT({ ...t, appSub: v })} />
+          <Input label="اسم النظام" value={t.appName} onChange={v => edit && setT({ ...t, appName: v })} />
+          <Input label="الوصف المختصر" value={t.appSub} onChange={v => edit && setT({ ...t, appSub: v })} />
           <div style={{ marginBottom: 14 }}>
-            <label style={{ display: 'block', fontSize: 12, color: C.sub, marginBottom: 5, fontWeight: 600 }}>العملة اللي بتظهر جنب المبالغ</label>
+            <label style={{ display: 'block', fontSize: 12, color: C.sub, marginBottom: 5, fontWeight: 600 }}>العملة</label>
             <select value={t.currency || 'ج.م'} disabled={!edit} onChange={e => setT({ ...t, currency: e.target.value })} style={sel}>
               {[['ج.م', 'جنيه مصري (ج.م)'], ['ر.س', 'ريال سعودي (ر.س)'], ['د.إ', 'درهم إماراتي (د.إ)'], ['$', 'دولار ($)']].map(([v, l]) => <option key={v} value={v}>{l}</option>)}
             </select>
@@ -206,7 +206,7 @@ function Theme() {
       </Card>
 
       <Card style={{ marginBottom: 14 }}>
-        <div style={{ fontWeight: 700, marginBottom: 12 }}>اللون الأساسي (الأزرار والقائمة المختارة)</div>
+        <div style={{ fontWeight: 700, marginBottom: 12 }}>اللون الأساسي</div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           {Object.entries(ACCENTS).map(([k, a]) => (
             <Swatch key={k} on={t.accent === k} onClick={() => setT({ ...t, accent: k })}>
@@ -234,21 +234,21 @@ function Theme() {
         <div style={{ display: 'flex', borderRadius: 10, overflow: 'hidden', border: `1px solid ${pv.border}`, height: 150 }}>
           <div style={{ flex: 1, background: pv.bg, padding: 14 }}>
             <div style={{ background: pv.card, border: `1px solid ${pv.border}`, borderRadius: 8, padding: 12, display: 'flex', gap: 8, alignItems: 'center' }}>
-              <span style={{ fontSize: 13 }}>كارت</span>
-              <span style={{ marginRight: 'auto', background: `linear-gradient(135deg,${pv.accent},${pv.accent2})`, color: '#fff', borderRadius: 6, padding: '6px 12px', fontSize: 12, fontWeight: 700 }}>زرار</span>
+              <span style={{ fontSize: 13 }}>بطاقة</span>
+              <span style={{ marginRight: 'auto', background: `linear-gradient(135deg,${pv.accent},${pv.accent2})`, color: '#fff', borderRadius: 6, padding: '6px 12px', fontSize: 12, fontWeight: 700 }}>زر</span>
             </div>
           </div>
           <div style={{ width: 150, background: pv.sidebar, borderRight: `1px solid ${pv.border}`, padding: 10 }}>
             <div style={{ fontSize: 11, fontWeight: 800, color: pv.accentLight, marginBottom: 6 }}>{t.appName}</div>
-            <div style={{ fontSize: 12, padding: '6px 8px', borderRadius: 6, background: pv.accent + '22', color: pv.accentLight, fontWeight: 700 }}>📦 الشحنات</div>
-            <div style={{ fontSize: 12, padding: '6px 8px', color: C.sub }}>🏷️ المنتجات</div>
+            <div style={{ fontSize: 12, padding: '6px 8px', borderRadius: 6, background: pv.accent + '22', color: pv.accentLight, fontWeight: 700 }}>الشحنات</div>
+            <div style={{ fontSize: 12, padding: '6px 8px', color: C.sub }}>المنتجات</div>
           </div>
         </div>
       </Card>
 
       {edit
-        ? <Btn size="lg" onClick={save} disabled={busy}>💾 حفظ وتطبيق على كل المستخدمين</Btn>
-        : <div style={{ color: C.muted, fontSize: 13 }}>🔒 عرض بس — مش عندك صلاحية تعديل المظهر</div>}
+        ? <Btn size="lg" onClick={save} disabled={busy}>حفظ وتطبيق على جميع المستخدمين</Btn>
+        : <div style={{ color: C.muted, fontSize: 13 }}>عرض فقط — ليس لديك صلاحية تعديل المظهر</div>}
     </div>
   );
 }
@@ -287,7 +287,7 @@ function DataTab() {
     setBusy(false);
   };
   const doImport = async () => {
-    if (!confirm(`تسجيل ${pv.total} صنف؟\n(${pv.newCount} جديد، ${pv.total - pv.newCount} موجود هيتحدّث)`)) return;
+    if (!confirm(`تأكيد استيراد ${pv.total} صنف؟\n(${pv.newCount} جديد، ${pv.total - pv.newCount} للتحديث)`)) return;
     // الملف بيترفع على دفعات صغيرة عشان الملفات الكبيرة ما تقفش في النص
     setBusy(true);
     const head = rows.slice(0, pv.headerRow + 1), body = rows.slice(pv.headerRow + 1);
@@ -300,11 +300,11 @@ function DataTab() {
         sum.errors.push(...data.errors.map(e => ({ ...e, row: e.row + i })));
         setProgress({ done: Math.min(i + SIZE, body.length), total: body.length });
       }
-      const message = `✅ ${sum.created} صنف جديد، ${sum.updated} اتحدّث${sum.mapped ? `، ${sum.mapped} SKU أمازون اتربط` : ''}${sum.errors.length ? ` — ${sum.errors.length} سطر فيه مشكلة` : ''}`;
+      const message = `تمت إضافة ${sum.created} صنف وتحديث ${sum.updated}${sum.mapped ? ` وربط ${sum.mapped} رمز SKU` : ''}${sum.errors.length ? ` — ${sum.errors.length} سطر يحتوي على أخطاء` : ''}`;
       setResult({ ...sum, message }); setPv(null); toast.success(message);
     } catch (e) {
-      toast.error(err(e) + ' — اللي اترفع لحد دلوقتي اتسجل، ارفع الملف تاني يكمّل من غير تكرار');
-      setResult({ ...sum, message: `⚠️ وقف بعد ${sum.created + sum.updated} صنف — ارفع نفس الملف تاني` });
+      toast.error(err(e) + ' — تم حفظ ما سبق رفعه، ويمكن إعادة رفع الملف لاستكمال الباقي دون تكرار');
+      setResult({ ...sum, message: `توقف الاستيراد بعد ${sum.created + sum.updated} صنف — يُرجى إعادة رفع الملف` });
     }
     setBusy(false); setProgress(null);
   };
@@ -312,17 +312,17 @@ function DataTab() {
   return (
     <div style={{ maxWidth: 1000 }}>
       <Card style={{ marginBottom: 14 }}>
-        <div style={{ fontWeight: 800, fontSize: 16, marginBottom: 6 }}>⬆️ استيراد الأصناف من Excel</div>
+        <div style={{ fontWeight: 800, fontSize: 16, marginBottom: 6 }}>استيراد الأصناف من Excel</div>
         <div style={{ fontSize: 13, color: C.sub, lineHeight: 1.9, marginBottom: 12 }}>
-          ارفع ملف Excel أو CSV فيه عمود <b>اسم الصنف</b> على الأقل — وأي أعمدة تانية موجودة (SKU، ASIN، الباركود، سعر الشراء، سعر البيع، الكمية، الفئة، المورد) بتتقري لوحدها بالعربي أو الإنجليزي.
-          الصنف الموجود (بنفس SKU أو الباركود أو الاسم) بيتحدّث، والجديد بيتعمل وياخد باركود تلقائي لو ملوش. الكمية بتتسجل «رصيد افتتاحي» في حركة المخزون.
+          يُقبل ملف Excel أو CSV يحتوي على عمود <b>اسم الصنف</b> كحد أدنى، ويتعرّف النظام تلقائياً على باقي الأعمدة (SKU، ASIN، الباركود، سعر الشراء، سعر البيع، الكمية، الفئة، المورد) بالعربية أو الإنجليزية.
+          يُحدَّث الصنف الموجود (بمطابقة SKU أو الباركود أو الاسم)، ويُنشأ الصنف الجديد مع باركود تلقائي عند عدم توفره. تُسجَّل الكميات كرصيد افتتاحي في حركة المخزون.
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: `linear-gradient(135deg,${C.accent},${C.accent2})`, color: '#fff', borderRadius: 8, padding: '10px 18px', fontWeight: 700, cursor: 'pointer', fontSize: 14 }}>
-            {busy ? '⏳ ...' : '📁 اختار ملف الأصناف'}
+            {busy ? 'جارٍ القراءة...' : 'اختيار ملف الأصناف'}
             <input type="file" accept=".xlsx,.xls,.csv,.txt" style={{ display: 'none' }} disabled={busy} onChange={e => { pick(e.target.files[0]); e.target.value = ''; }} />
           </label>
-          <Btn variant="ghost" onClick={template}>⬇️ نزّل نموذج Excel فاضي</Btn>
+          <Btn variant="ghost" onClick={template}>تنزيل نموذج Excel</Btn>
         </div>
       </Card>
 
@@ -330,31 +330,31 @@ function DataTab() {
         <Card style={{ marginBottom: 14, padding: 0 }}>
           <div style={{ padding: 14, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
             <div>
-              <div style={{ fontWeight: 700 }}>📄 {fileName} — {pv.total} صنف <Badge color="#10b981">{pv.newCount} جديد</Badge> <Badge color="#3b82f6">{pv.total - pv.newCount} هيتحدّث</Badge></div>
-              <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>الأعمدة اللي اتفهمت: {pv.columns.map(c => COL_LABELS[c] || c).join('، ')}</div>
+              <div style={{ fontWeight: 700 }}>{fileName} — {pv.total} صنف <Badge color="#10b981">{pv.newCount} جديد</Badge> <Badge color="#3b82f6">{pv.total - pv.newCount} للتحديث</Badge></div>
+              <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>الأعمدة المعتمدة: {pv.columns.map(c => COL_LABELS[c] || c).join('، ')}</div>
             </div>
             <div style={{ display: 'flex', gap: 8 }}>
               <Btn variant="ghost" onClick={() => { setPv(null); setRows(null); }}>إلغاء</Btn>
-              <Btn variant="success" onClick={doImport} disabled={busy}>✅ سجّل الأصناف</Btn>
+              <Btn variant="success" onClick={doImport} disabled={busy}>تأكيد الاستيراد</Btn>
             </div>
           </div>
           <Table columns={[
             { key: 'name', title: 'الصنف', render: (v, r) => <span style={{ fontWeight: 600 }}>{v} {r.exists && <Badge color="#3b82f6">موجود</Badge>}</span> },
             { key: 'sku', title: 'SKU', render: v => <span dir="ltr">{v || '—'}</span> },
             { key: 'barcode', title: 'الباركود', render: v => v || <span style={{ color: C.muted, fontSize: 11 }}>تلقائي</span> },
-            { key: 'buyPrice', title: 'شراء', render: v => v ?? '—' },
-            { key: 'sellPrice', title: 'بيع', render: v => v ?? '—' },
+            { key: 'buyPrice', title: 'سعر الشراء', render: v => v ?? '—' },
+            { key: 'sellPrice', title: 'سعر البيع', render: v => v ?? '—' },
             { key: 'stock', title: 'الكمية', render: v => v ?? '—' },
             { key: 'category', title: 'الفئة', render: v => v || '—' },
             { key: 'extraSkus', title: 'SKUs أمازون', render: v => v?.length ? <span dir="ltr" style={{ fontSize: 11 }}>{v.join(', ')}</span> : '—' },
           ]} data={pv.items.slice(0, 200).map(i => ({ ...i, _id: i.row }))} />
-          {pv.items.length > 200 && <div style={{ padding: 10, fontSize: 12, color: C.muted, textAlign: 'center' }}>بيعرض أول 200 بس — كله هيتسجل</div>}
+          {pv.items.length > 200 && <div style={{ padding: 10, fontSize: 12, color: C.muted, textAlign: 'center' }}>يُعرض أول 200 صنف فقط، وسيُستورد الملف بالكامل</div>}
         </Card>
       )}
 
       {progress && (
         <Card style={{ marginBottom: 14 }}>
-          <div style={{ fontWeight: 700, marginBottom: 8 }}>⏳ جاري التسجيل… {progress.done} من {progress.total} — ما تقفلش الصفحة</div>
+          <div style={{ fontWeight: 700, marginBottom: 8 }}>جارٍ الاستيراد: {progress.done} من {progress.total} — يُرجى عدم إغلاق الصفحة</div>
           <div style={{ height: 10, background: C.bg, borderRadius: 6, overflow: 'hidden' }}>
             <div style={{ width: `${Math.round(progress.done / progress.total * 100)}%`, height: '100%', background: `linear-gradient(90deg,${C.accent},${C.accent2})`, transition: 'width .3s' }} />
           </div>
@@ -364,7 +364,7 @@ function DataTab() {
       {result && (
         <Card style={{ marginBottom: 14, borderColor: result.errors.length ? '#f59e0b88' : '#10b98188' }}>
           <div style={{ fontWeight: 700, marginBottom: 6 }}>{result.message}</div>
-          {result.errors.map(e => <div key={e.row} style={{ fontSize: 12, color: '#f87171' }}>سطر {e.row} — {e.name}: {e.message}</div>)}
+          {result.errors.map(e => <div key={e.row} style={{ fontSize: 12, color: '#f87171' }}>السطر {e.row} — {e.name}: {e.message}</div>)}
         </Card>
       )}
 
@@ -388,8 +388,8 @@ function ResetCard() {
   };
   return (
     <Card style={{ borderColor: '#ef444466' }}>
-      <div style={{ fontWeight: 800, fontSize: 16, color: '#f87171', marginBottom: 6 }}>🗑️ تصفير البيانات</div>
-      <div style={{ fontSize: 13, color: C.sub, marginBottom: 12 }}>المسح نهائي ومش بيرجع. علّم بس على اللي عايز تمسحه. المستخدمين والموظفين والإعدادات مش بيتمسحوا أبداً.</div>
+      <div style={{ fontWeight: 800, fontSize: 16, color: '#f87171', marginBottom: 6 }}>حذف البيانات</div>
+      <div style={{ fontSize: 13, color: C.sub, marginBottom: 12 }}>الحذف نهائي ولا يمكن التراجع عنه. حدّد البيانات المطلوب حذفها فقط. لا يشمل الحذف المستخدمين أو الموظفين أو الإعدادات.</div>
       {counts && Object.entries(counts).map(([k, c]) => (
         <label key={k} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', fontSize: 14, cursor: 'pointer' }}>
           <input type="checkbox" checked={!!pick[k]} onChange={e => setPick({ ...pick, [k]: e.target.checked })} />
@@ -397,8 +397,8 @@ function ResetCard() {
         </label>
       ))}
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 12, flexWrap: 'wrap' }}>
-        <input value={word} onChange={e => setWord(e.target.value)} placeholder="اكتب: امسح" style={{ background: 'var(--bg)', border: '1px solid #ef444466', borderRadius: 8, padding: '9px 12px', color: 'var(--text)', fontSize: 14, outline: 'none', width: 160 }} />
-        <Btn variant="danger" onClick={go} disabled={busy || word !== 'امسح' || !Object.values(pick).some(Boolean)}>{busy ? '⏳' : '🗑️ امسح المختار'}</Btn>
+        <input value={word} onChange={e => setWord(e.target.value)} placeholder="اكتب: حذف" style={{ background: 'var(--bg)', border: '1px solid #ef444466', borderRadius: 8, padding: '9px 12px', color: 'var(--text)', fontSize: 14, outline: 'none', width: 160 }} />
+        <Btn variant="danger" onClick={go} disabled={busy || word !== 'حذف' || !Object.values(pick).some(Boolean)}>{busy ? 'جارٍ الحذف...' : 'حذف البيانات المحددة'}</Btn>
       </div>
     </Card>
   );

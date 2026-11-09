@@ -54,7 +54,7 @@ router.get('/', auth, READ, async (req, res) => {
 
 router.get('/:id', auth, READ, async (req, res) => {
   const s = await Shipment.findById(req.params.id).populate('employee', 'name code').populate('items.product', 'name stock barcode').lean();
-  if (!s) return res.status(404).json({ message: 'الشحنة مش موجودة' });
+  if (!s) return res.status(404).json({ message: 'الشحنة غير موجودة' });
   res.json(s);
 });
 
@@ -90,8 +90,8 @@ router.post('/', auth, CAN, async (req, res) => {
 router.put('/:id', auth, CAN, async (req, res) => {
   try {
     const s = await Shipment.findById(req.params.id);
-    if (!s) return res.status(404).json({ message: 'الشحنة مش موجودة' });
-    if (s.status !== 'draft') return res.status(400).json({ message: 'الشحنة اترحّلت — مينفعش تتعدل' });
+    if (!s) return res.status(404).json({ message: 'الشحنة غير موجودة' });
+    if (s.status !== 'draft') return res.status(400).json({ message: 'لا يمكن تعديل شحنة مُرحّلة' });
     if (req.body.employee !== undefined) s.employee = req.body.employee || undefined;
     if (req.body.notes !== undefined) s.notes = req.body.notes;
     if (req.body.items) s.items = await cleanItems(req.body.items);
@@ -102,20 +102,20 @@ router.put('/:id', auth, CAN, async (req, res) => {
 
 router.delete('/:id', auth, CAN, async (req, res) => {
   const s = await Shipment.findById(req.params.id);
-  if (!s) return res.status(404).json({ message: 'الشحنة مش موجودة' });
-  if (s.status !== 'draft') return res.status(400).json({ message: 'مينفعش تمسح شحنة مترحّلة' });
+  if (!s) return res.status(404).json({ message: 'الشحنة غير موجودة' });
+  if (s.status !== 'draft') return res.status(400).json({ message: 'لا يمكن حذف شحنة مُرحّلة' });
   await s.deleteOne();
-  res.json({ message: 'اتمسحت' });
+  res.json({ message: 'تم الحذف' });
 });
 
 // ترحيل: المبيعات تتخصم من المخزون والمرتجع يرجع
 router.post('/:id/post', auth, CAN, async (req, res) => {
   try {
     const s = await Shipment.findById(req.params.id);
-    if (!s) return res.status(404).json({ message: 'الشحنة مش موجودة' });
-    if (s.status !== 'draft') return res.status(400).json({ message: 'الشحنة اترحّلت قبل كده' });
-    if (!s.employee) return res.status(400).json({ message: 'امسح كارت الموظف الأول' });
-    if (!s.items.length) return res.status(400).json({ message: 'الشحنة فاضية' });
+    if (!s) return res.status(404).json({ message: 'الشحنة غير موجودة' });
+    if (s.status !== 'draft') return res.status(400).json({ message: 'تم ترحيل الشحنة مسبقاً' });
+    if (!s.employee) return res.status(400).json({ message: 'يلزم تسجيل الموظف أولاً' });
+    if (!s.items.length) return res.status(400).json({ message: 'الشحنة لا تحتوي على أصناف' });
 
     const prods = await Product.find({ _id: { $in: s.items.map(i => i.product) } });
     const byId = new Map(prods.map(p => [String(p._id), p]));
@@ -128,7 +128,7 @@ router.post('/:id/post', auth, CAN, async (req, res) => {
     }
     const short = Object.entries(after).filter(([, v]) => v < 0).map(([id, v]) => ({ product: id, name: byId.get(id)?.name, missing: -v }));
     if (short.length && !req.body.force)
-      return res.status(409).json({ message: 'فيه أصناف المخزون بتاعها مش مكفي', short });
+      return res.status(409).json({ message: 'الرصيد غير كافٍ لبعض الأصناف', short });
 
     // المرتجع الأول عشان الرصيد ما يقعش بالسالب من غير داعي
     const ordered = [...s.items].sort((a, b) => (a.type === 'return' ? 0 : 1) - (b.type === 'return' ? 0 : 1));
@@ -145,7 +145,7 @@ router.post('/:id/post', auth, CAN, async (req, res) => {
     }
     s.status = 'posted'; s.postedAt = new Date(); s.postedBy = req.user._id;
     await s.save();
-    res.json({ message: `✅ اترحّلت ${s.no}`, shipment: s });
+    res.json({ message: `تم ترحيل الشحنة ${s.no}`, shipment: s });
   } catch (e) { res.status(500).json({ message: e.message }); }
 });
 
@@ -217,10 +217,10 @@ async function computeMatch(s) {
 router.post('/:id/match', auth, CAN, async (req, res) => {
   try {
     const s = await Shipment.findById(req.params.id).populate('items.product', 'name');
-    if (!s) return res.status(404).json({ message: 'الشحنة مش موجودة' });
-    if (s.status !== 'posted') return res.status(400).json({ message: 'رحّل الشحنة الأول وبعدين طابقها' });
+    if (!s) return res.status(404).json({ message: 'الشحنة غير موجودة' });
+    if (s.status !== 'posted') return res.status(400).json({ message: 'يلزم ترحيل الشحنة قبل المطابقة' });
     const file = readAmazonFile(req.body.rows || []);
-    if (!file) return res.status(400).json({ message: 'مش قادر أقرأ الملف — ارفع تقرير المعاملات أو تقرير الطلبات من أمازون', headers: (req.body.rows?.[0] || []).slice(0, 30) });
+    if (!file) return res.status(400).json({ message: 'تعذّرت قراءة الملف — يُرجى رفع تقرير المعاملات أو تقرير الطلبات من أمازون', headers: (req.body.rows?.[0] || []).slice(0, 30) });
     // نفس الملف بيتسجل كمان في مركز أمازون (الطلبات/المعاملات) عشان الربحية والتسويات — من غير تكرار
     const rows = req.body.rows || [];
     const imported = file.fileType === 'transactions' ? await amazon.importTransactions(rows) : await amazon.importOrders(rows);
@@ -236,7 +236,7 @@ router.post('/:id/match', auth, CAN, async (req, res) => {
 router.get('/:id/match', auth, READ, async (req, res) => {
   try {
     const s = await Shipment.findById(req.params.id).populate('items.product', 'name');
-    if (!s) return res.status(404).json({ message: 'الشحنة مش موجودة' });
+    if (!s) return res.status(404).json({ message: 'الشحنة غير موجودة' });
     if (!s.match?.fileName) return res.json(null);
     const m = await computeMatch(s);
     if (s.match.result !== m.result) { s.match.result = m.result; await s.save(); }

@@ -32,9 +32,9 @@ export default function CameraScanner({ open, onClose, onScan, continuous = fals
       () => {}
     ).catch(e => {
       const m = String(e?.message || e);
-      setErr(/Permission|NotAllowed/i.test(m) ? 'اسمح للمتصفح باستخدام الكاميرا (من إعدادات الموقع) وجرّب تاني'
-        : /secure|https/i.test(m) ? 'الكاميرا بتشتغل على رابط https بس'
-        : 'مش قادر يفتح الكاميرا: ' + m);
+      setErr(/Permission|NotAllowed/i.test(m) ? 'يُرجى السماح للمتصفح باستخدام الكاميرا من إعدادات الموقع ثم إعادة المحاولة'
+        : /secure|https/i.test(m) ? 'تتطلب الكاميرا اتصالاً آمناً (https)'
+        : 'تعذّر تشغيل الكاميرا: ' + m);
     });
     return () => { stop(); };
   }, [open]);
@@ -49,7 +49,7 @@ export default function CameraScanner({ open, onClose, onScan, continuous = fals
 
   const toggleTorch = async () => {
     try { await scanner.current?.applyVideoConstraints({ advanced: [{ torch: !torch }] }); setTorch(!torch); }
-    catch { setErr('الفلاش مش مدعوم على الجهاز ده'); }
+    catch { setErr('الإضاءة غير مدعومة على هذا الجهاز'); }
   };
 
   if (!open) return null;
@@ -59,7 +59,7 @@ export default function CameraScanner({ open, onClose, onScan, continuous = fals
         <span style={{ fontWeight: 700, fontSize: 16 }}>📷 {title}</span>
         <div style={{ display: 'flex', gap: 8 }}>
           <button onClick={toggleTorch} style={btn(torch ? '#f59e0b' : 'var(--border)')}>🔦</button>
-          <button onClick={close} style={btn('#ef4444')}>✕ قفل</button>
+          <button onClick={close} style={btn('#ef4444')}>إغلاق</button>
         </div>
       </div>
       <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
@@ -69,7 +69,7 @@ export default function CameraScanner({ open, onClose, onScan, continuous = fals
         <div style={{ margin: '0 16px', padding: '12px 14px', borderRadius: 10, textAlign: 'center', fontWeight: 700, fontSize: 16, background: message.ok ? '#10b98133' : '#ef444433', color: message.ok ? '#34d399' : '#f87171' }}>{message.text}</div>
       )}
       <div style={{ padding: 16, textAlign: 'center', color: err ? '#f87171' : '#94a3b8', fontSize: 14 }}>
-        {err || (continuous ? 'وجّه الكاميرا على الباركود — تقدر تمسح قطع ورا بعض' : 'وجّه الكاميرا على الباركود')}
+        {err || (continuous ? 'وجّه الكاميرا نحو الباركود — يمكن مسح عدة وحدات متتالية' : 'وجّه الكاميرا نحو الباركود')}
       </div>
     </div>
   );
