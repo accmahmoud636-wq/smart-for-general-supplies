@@ -61,8 +61,26 @@ const PRODUCT_ALIASES = {
 const clean = (v) => String(v ?? '').trim();
 const eanCheck = (d12) => String((10 - (d12.split('').reduce((s, d, i) => s + (+d) * (i % 2 ? 3 : 1), 0) % 10)) % 10);
 
+// ملف أمازون الخام ممكن عمود الاسم يكون من غير عنوان واضح (Column1): نختار العمود اللي أغلبه نص عربي
+function guessNameColumn(rows) {
+  const found = mapHeaders(rows, PRODUCT_ALIASES, ['sku']);
+  if (!found) return null;
+  const used = new Set(Object.values(found.idx));
+  const sample = rows.slice(found.headerRow + 1, found.headerRow + 200).filter(r => r.some(v => String(v ?? '').trim()));
+  const width = Math.max(...sample.map(r => r.length), 0);
+  let best = -1, score = 0;
+  for (let j = 0; j < width; j++) {
+    if (used.has(j)) continue;
+    const n = sample.filter(r => /[\u0600-\u06FF]{2,}/.test(String(r[j] ?? ''))).length;
+    if (n > score) { score = n; best = j; }
+  }
+  return best >= 0 && score > 0 && score >= sample.length / 3 ? { headerRow: found.headerRow, idx: { ...found.idx, name: best } } : null;
+}
+
+const nameKey = (s) => String(s).toLowerCase().replace(/[\u064B-\u0652\u0640]/g, '').replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي').replace(/\s+/g, ' ').trim();
+
 function readProducts(rows) {
-  const found = mapHeaders(rows, PRODUCT_ALIASES, ['name']);
+  const found = mapHeaders(rows, PRODUCT_ALIASES, ['name']) || guessNameColumn(rows);
   if (!found) return null;
   const { headerRow, idx } = found;
   const get = (r, f) => idx[f] !== undefined ? clean(r[idx[f]]) : '';
@@ -82,7 +100,19 @@ function readProducts(rows) {
       extraSkus: get(r, 'extraSkus').split(/[,،;|\n]+/).map(s => s.trim()).filter(Boolean),
     });
   });
-  return { items, columns: Object.keys(idx), headerRow };
+  // نفس الصنف متكرر بأكتر من SKU (إعلان لكل SKU في أمازون): يتجمع في كارت واحد
+  // أول SKU يبقى الأساسي والباقي يتربط بالصنف
+  const groups = new Map();
+  for (const it of items) {
+    const k = nameKey(it.name);
+    const g = groups.get(k);
+    if (!g) { groups.set(k, { ...it, extraSkus: [...it.extraSkus] }); continue; }
+    for (const sku of [it.sku, ...it.extraSkus]) if (sku && sku !== g.sku && !g.extraSkus.includes(sku)) g.extraSkus.push(sku);
+    for (const f of ['asin', 'barcode', 'category', 'supplier', 'unit']) if (!g[f] && it[f]) g[f] = it[f];
+    for (const f of ['buyPrice', 'sellPrice', 'minStock']) if ((g[f] === null || g[f] === 0) && it[f]) g[f] = it[f];
+    if (it.stock !== null) g.stock = (g.stock || 0) + it.stock;
+  }
+  return { items: [...groups.values()], columns: Object.keys(idx), headerRow, rawRows: items.length };
 }
 
 // معاينة: إيه اللي اتفهم من الملف قبل ما يتسجل
@@ -93,11 +123,14 @@ router.post('/products/preview', auth, permit('products'), async (req, res) => {
   const key = (p) => [p.sku && 's:' + p.sku.toLowerCase(), p.barcode && 'b:' + p.barcode, 'n:' + p.name.trim().toLowerCase()].filter(Boolean);
   const known = new Set(existing.flatMap(key));
   const items = out.items.map(it => ({ ...it, exists: key(it).some(k => known.has(k)) }));
-  res.json({ columns: out.columns, headerRow: out.headerRow, items, total: items.length, newCount: items.filter(i => !i.exists).length });
+  res.json({ columns: out.columns, headerRow: out.headerRow, items, total: items.length, rawRows: out.rawRows, newCount: items.filter(i => !i.exists).length });
 });
 
 router.post('/products/import', auth, permit('products'), async (req, res) => {
   try {
+    // دفعة كلها أسطر فاضية (آخر الملف): مفيش حاجة تتسجل
+    if ((req.body.rows || []).filter(r => Array.isArray(r) && r.some(v => String(v ?? '').trim())).length <= 1)
+      return res.json({ message: 'لا توجد أصناف', created: 0, updated: 0, mapped: 0, errors: [] });
     const out = readProducts(req.body.rows || []);
     if (!out) return res.status(400).json({ message: 'لم يُعثر على عمود اسم الصنف' });
     const cats = new Map((await Category.find().lean()).map(c => [c.name.trim().toLowerCase(), c._id]));
@@ -122,7 +155,9 @@ router.post('/products/import', auth, permit('products'), async (req, res) => {
       try {
         const p = (it.sku && bySku.get(it.sku)) || (it.barcode && byBarcode.get(it.barcode)) || byName.get(it.name);
         const data = { name: it.name };
-        if (it.sku) data.sku = it.sku;
+        const extra = [...it.extraSkus];
+        // صنف موجود وليه SKU أساسي مختلف: الـ SKU الجديد يتضاف كإعلان إضافي بدل ما يمسح القديم
+        if (it.sku) { if (p && p.sku && p.sku !== it.sku) extra.unshift(it.sku); else data.sku = it.sku; }
         if (it.asin) data.asin = it.asin;
         if (it.barcode) data.barcode = it.barcode;
         if (it.buyPrice !== null) data.buyPrice = it.buyPrice;
@@ -148,7 +183,7 @@ router.post('/products/import', auth, permit('products'), async (req, res) => {
         opRow.push(it);
         if (it.stock !== null && it.stock !== before)
           moves.push({ product: id, type: 'adjust', qty: Math.abs(it.stock - before), before, after: it.stock, reason: 'رصيد افتتاحي (استيراد)', reference: 'IMPORT', createdBy: req.user._id });
-        for (const sku of it.extraSkus) mapOps.push({ updateOne: { filter: { sku }, update: { $set: { sku, product: id } }, upsert: true } });
+        for (const sku of extra) mapOps.push({ updateOne: { filter: { sku }, update: { $set: { sku, product: id } }, upsert: true } });
       } catch (e) { errors.push({ row: it.row, name: it.name, message: e.message }); }
     }
     // التسجيل على دفعات — سطر فيه مشكلة ما يوقفش الباقي

@@ -332,7 +332,7 @@ function DataTab() {
         <Card style={{ marginBottom: 14, padding: 0 }}>
           <div style={{ padding: 14, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
             <div>
-              <div style={{ fontWeight: 700 }}>{fileName} — {pv.total} صنف <Badge color="#10b981">{pv.newCount} جديد</Badge> <Badge color="#3b82f6">{pv.total - pv.newCount} للتحديث</Badge></div>
+              <div style={{ fontWeight: 700 }}>{fileName} — {pv.total} صنف{pv.rawRows > pv.total && <span style={{ fontSize: 12, color: C.sub, fontWeight: 500 }}> (من {pv.rawRows} سطر — الأسطر المتكررة لنفس الصنف جُمعت في كارت واحد بكل رموز SKU)</span>} <Badge color="#10b981">{pv.newCount} جديد</Badge> <Badge color="#3b82f6">{pv.total - pv.newCount} للتحديث</Badge></div>
               <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>الأعمدة المعتمدة: {pv.columns.map(c => COL_LABELS[c] || c).join('، ')}</div>
             </div>
             <div style={{ display: 'flex', gap: 8 }}>
