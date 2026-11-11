@@ -22,28 +22,27 @@ export function SeasonBanner() {
   const hide = () => { try { localStorage.setItem(HIDE_KEY, today); } catch { /* */ } setHidden(true); };
 
   return (
-    <div style={{ marginBottom: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
-      {list.slice(0, 2).map((s, i) => {
-        const left = s.active ? Math.max(0, s.duration + s.daysLeft) : s.daysLeft;
-        return (
-          <div key={s.id} onClick={() => nav('/seasons')} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', borderRadius: 12, cursor: 'pointer', background: `linear-gradient(90deg, ${s.color}26, ${s.color}0d)`, border: `1px solid ${s.color}66` }}>
-            <span style={{ fontSize: 26 }}>{s.icon}</span>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontWeight: 800, fontSize: 15 }}>
-                {s.active ? <>موسم {s.name} بدأ — باقي {daysAr(left)} على نهايته</> : <>باقي <span style={{ color: s.color, fontSize: 18 }}>{daysAr(s.daysLeft)}</span> على {s.name}</>}
-              </div>
-              <div style={{ fontSize: 12, color: C.sub, marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                {fmtDay(s.date, { weekday: 'long', day: 'numeric', month: 'long' })}
-                {!s.active && s.prepBy && (s.prepBy <= today ? ' · وقت تجهيز المخزون بدأ' : ` · جهّز المخزون قبل ${fmtDay(s.prepBy, { day: 'numeric', month: 'long' })}`)}
-                {' · '}{s.ideas.slice(0, 2).join('، ')}
+    <div style={{ marginBottom: 16, display: 'flex', gap: 8, alignItems: 'stretch' }}>
+      <div style={{ flex: 1, display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(250px,1fr))', gap: 8 }}>
+        {list.map(s => {
+          const left = s.active ? Math.max(0, s.duration + s.daysLeft) : s.daysLeft;
+          return (
+            <div key={s.id} onClick={() => nav('/seasons')} title="عرض أفكار الموسم" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', borderRadius: 12, cursor: 'pointer', background: `linear-gradient(90deg, ${s.color}26, ${s.color}0d)`, border: `1px solid ${s.color}66`, minWidth: 0 }}>
+              <span style={{ fontSize: 24, flexShrink: 0 }}>{s.icon}</span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 800, fontSize: 14, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {s.active ? <>{s.name} — <span style={{ color: s.color }}>شغّال الآن</span></> : <>باقي <span style={{ color: s.color, fontSize: 16 }}>{daysAr(s.daysLeft)}</span> على {s.name}</>}
+                </div>
+                <div style={{ fontSize: 11, color: C.sub, marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {s.active ? `باقي ${daysAr(left)} على نهايته` : fmtDay(s.date, { weekday: 'long', day: 'numeric', month: 'long' })}
+                  {!s.active && s.prepBy && s.prepBy <= today && ' · وقت تجهيز المخزون'}
+                </div>
               </div>
             </div>
-            <span style={{ fontSize: 12, color: s.color, fontWeight: 700, whiteSpace: 'nowrap' }}>الأفكار ←</span>
-            {i === 0 && <button onClick={(e) => { e.stopPropagation(); hide(); }} title="إخفاء حتى الغد" style={{ background: 'none', border: 'none', color: C.muted, cursor: 'pointer', fontSize: 14, padding: 4 }}>✕</button>}
-          </div>
-        );
-      })}
-      {list.length > 2 && <div onClick={() => nav('/seasons')} style={{ fontSize: 12, color: C.sub, cursor: 'pointer' }}>+ {list.length - 2} موسم آخر قريب</div>}
+          );
+        })}
+      </div>
+      <button onClick={hide} title="إخفاء حتى الغد" style={{ alignSelf: 'flex-start', background: 'none', border: `1px solid ${C.border}`, borderRadius: 8, color: C.muted, cursor: 'pointer', fontSize: 13, width: 30, height: 30, flexShrink: 0 }}>✕</button>
     </div>
   );
 }
