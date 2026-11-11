@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import api from '../utils/api';
 import { C_THEME as C, THEME, THEME_KEY, getMode, setMode } from './UI';
+import Assistant from './Assistant';
 
 // الشريط الجانبي: أقسام بالترتيب اللي بيتشغّل بيه الشغل كل يوم
 const SECTIONS = [
@@ -37,6 +38,7 @@ const SECTIONS = [
     { path: '/settings?tab=data',      icon: '🗂️', label: 'إدارة البيانات',      perm: 'products' },
     { path: '/settings?tab=users',     icon: '🔐', label: 'المستخدمون والصلاحيات', perm: 'all' },
     { path: '/settings?tab=theme',     icon: '🎨', label: 'المظهر',    perm: 'settings:read' },
+    { path: '/settings?tab=assistant', icon: '✨', label: 'المساعد الذكي', perm: 'all' },
   ] },
 ];
 
@@ -154,8 +156,9 @@ export default function Layout({ children }) {
             <ModeBtn />
           </div>
         )}
-        <div style={{ padding: mobile ? '14px 12px' : '24px' }}>{children}</div>
+        <div style={{ padding: mobile ? '14px 12px 84px' : '24px 24px 90px' }}>{children}</div>
       </div>
+      <Assistant />
     </div>
   );
 }

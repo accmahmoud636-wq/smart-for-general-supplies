@@ -28,6 +28,7 @@ app.use('/api/reports',    reportsRouter);
 app.use('/api/amazon',     require('./routes/amazon'));
 app.use('/api/shipments',  require('./routes/shipments'));
 app.use('/api/damaged',    require('./routes/damaged'));
+app.use('/api/assistant',  require('./routes/assistant'));
 app.use('/api/settings',   require('./routes/settings'));
 app.use('/api/home',       require('./routes/home'));
 app.use('/api/admin',      require('./routes/admin'));

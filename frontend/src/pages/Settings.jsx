@@ -12,6 +12,7 @@ const TABS = [
   ['users', 'المستخدمون والصلاحيات', 'all'],
   ['theme', 'المظهر', 'settings:read'],
   ['data', 'إدارة البيانات', 'products'],
+  ['assistant', 'المساعد الذكي', 'all'],
 ];
 const err = (e) => e.response?.data?.message || e.message || 'خطأ';
 
@@ -34,6 +35,7 @@ export default function Settings() {
       {tab === 'users' && <UsersPerms />}
       {tab === 'theme' && <Theme />}
       {tab === 'data' && <DataTab />}
+      {tab === 'assistant' && <AssistantTab />}
     </div>
   );
 }
@@ -401,5 +403,60 @@ function ResetCard() {
         <Btn variant="danger" onClick={go} disabled={busy || word !== 'حذف' || !Object.values(pick).some(Boolean)}>{busy ? 'جارٍ الحذف...' : 'حذف البيانات المحددة'}</Btn>
       </div>
     </Card>
+  );
+}
+
+// ═══ المساعد الذكي: مفتاح API والموديل والاستهلاك ════════════════
+function AssistantTab() {
+  const [cfg, setCfg] = useState(null);
+  const [key, setKey] = useState('');
+  const [model, setModel] = useState('');
+  const [busy, setBusy] = useState(false);
+  const load = () => api.get('/assistant/config').then(r => { setCfg(r.data); setModel(r.data.model); }).catch(e => toast.error(err(e)));
+  useEffect(() => { load(); }, []);
+  const save = async (body) => {
+    setBusy(true);
+    try { const { data } = await api.put('/assistant/config', body); toast.success(data.message); setKey(''); await load(); setTimeout(() => window.location.reload(), 600); }
+    catch (e) { toast.error(err(e)); }
+    setBusy(false);
+  };
+  if (!cfg) return <div style={{ padding: 30, color: C.muted }}>⏳</div>;
+  const u = cfg.usage;
+  return (
+    <div style={{ maxWidth: 720 }}>
+      <Card style={{ marginBottom: 14, fontSize: 13, color: C.sub, lineHeight: 1.9 }}>
+        المساعد الذكي يعمل من زر <b>✨</b> أسفل الشاشة في كل الصفحات: تكتب أو تتحدث بأمر مثل «اشتريت 20 كنكة بسعر 150» فيجهّز العملية ويعرضها عليك، ولا يُنفّذ أي تعديل إلا بعد ضغط «تأكيد».
+        يلتزم بصلاحيات كل مستخدم. يعمل عبر Claude من Anthropic ويحتاج مفتاح API من <a href="https://console.anthropic.com" target="_blank" rel="noreferrer" style={{ color: C.accentLight }}>console.anthropic.com</a> برصيد مشحون.
+      </Card>
+      <Card style={{ marginBottom: 14 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+          <b>الحالة</b>
+          <Badge color={cfg.hasKey ? '#10b981' : '#64748b'}>{cfg.hasKey ? 'مفعّل' : 'غير مفعّل'}</Badge>
+        </div>
+        {cfg.hasKey && <div style={{ fontSize: 13, color: C.sub, marginBottom: 12 }}>المفتاح الحالي: <span dir="ltr" style={{ fontFamily: 'monospace' }}>{cfg.keyHint}</span>{cfg.fromEnv && ' (من متغيرات Render)'}</div>}
+        <div style={{ fontSize: 12, color: C.muted, marginBottom: 6 }}>{cfg.hasKey ? 'استبدال المفتاح' : 'مفتاح API'}</div>
+        <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap' }}>
+          <input value={key} onChange={e => setKey(e.target.value)} placeholder="sk-ant-..." dir="ltr" type="password"
+            style={{ flex: 1, minWidth: 220, background: 'var(--bg)', border: `1px solid ${C.border}`, borderRadius: 8, padding: '10px 12px', color: C.text, fontSize: 14, outline: 'none', fontFamily: 'monospace' }} />
+          <Btn onClick={() => save({ apiKey: key, model })} disabled={busy || !key.trim()}>{busy ? 'جارٍ التحقق...' : 'حفظ وتفعيل'}</Btn>
+        </div>
+        <div style={{ fontSize: 12, color: C.muted, marginBottom: 6 }}>الموديل</div>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {Object.entries(cfg.models).map(([k, l]) => (
+            <button key={k} onClick={() => { setModel(k); if (cfg.hasKey) save({ model: k }); }} style={{ padding: '8px 14px', borderRadius: 8, cursor: 'pointer', fontSize: 13, fontWeight: 700, background: model === k ? '#6366f133' : 'transparent', border: `1px solid ${model === k ? '#6366f1' : C.border}`, color: model === k ? '#a5b4fc' : C.sub }}>{l}</button>
+          ))}
+        </div>
+        {cfg.hasKey && !cfg.fromEnv && <div style={{ marginTop: 16 }}><Btn variant="ghost" size="sm" onClick={() => confirm('إيقاف المساعد وحذف المفتاح؟') && save({ apiKey: '' })}>إيقاف المساعد</Btn></div>}
+      </Card>
+      {u && (
+        <Card>
+          <b>استهلاك هذا الشهر ({u.month})</b>
+          <div style={{ fontSize: 13, color: C.sub, marginTop: 8, lineHeight: 1.9 }}>
+            عدد الطلبات: {u.requests.toLocaleString('en')} — رموز الإدخال: {u.input.toLocaleString('en')} — رموز الإخراج: {u.output.toLocaleString('en')}
+            <div style={{ fontSize: 12, color: C.muted }}>التكلفة الفعلية وحد الصرف الشهري يُتابعان من حسابك على console.anthropic.com.</div>
+          </div>
+        </Card>
+      )}
+    </div>
   );
 }
