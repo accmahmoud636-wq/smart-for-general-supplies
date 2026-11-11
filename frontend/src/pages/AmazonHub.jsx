@@ -5,6 +5,7 @@ import { Card, Btn, Badge, Input, Table, PageHeader, StatCard, fmt, fmtDate, C_T
 import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
+import ProductPicker from '../components/ProductPicker';
 
 const CUR = THEME.currency || 'ج.م';
 const money = (v) => <span style={{ color: v < 0 ? '#f87171' : C.text, fontWeight: 600 }}>{fmt(v)}</span>;
@@ -353,10 +354,7 @@ function SkusTab({ canEdit }) {
     { key: 'product', title: 'المنتج في النظام', render: (v, r) => v
       ? <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}><Badge color="#10b981">{v.name}</Badge>{r.manual && canEdit && <Btn size="sm" variant="ghost" onClick={() => unmap(r.sku)}>إلغاء الربط</Btn>}</div>
       : canEdit
-        ? <select defaultValue="" onChange={e => map(r.sku, e.target.value)} style={{ background: 'var(--bg)', border: '1px solid #f8717155', borderRadius: 6, padding: '6px 8px', color: C.text, fontSize: 12, maxWidth: 240 }}>
-            <option value="">— اختر الصنف —</option>
-            {products.map(p => <option key={p._id} value={p._id}>{p.name}{p.sku ? ` (${p.sku})` : ''}</option>)}
-          </select>
+        ? <ProductPicker products={products} onSelect={(id) => map(r.sku, id)} borderColor="#f8717155" />
         : <Badge color="#ef4444">غير مربوط</Badge> },
   ];
 

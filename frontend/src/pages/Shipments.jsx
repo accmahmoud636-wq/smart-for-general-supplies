@@ -6,6 +6,7 @@ import { beep, printLabels } from '../utils/barcode';
 import { readReportFile } from '../utils/parseReport';
 import CameraScanner from '../components/CameraScanner';
 import { PhotoStrip } from '../components/Photos';
+import ProductPicker from '../components/ProductPicker';
 import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
 
@@ -441,10 +442,7 @@ function ShipmentMatch({ id, onBack }) {
               { key: 'ret', title: 'مرتجعات', render: v => v || '—' },
               { key: 'sku', title: 'الربط بصنف', render: (v, r) => (
                 <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                  <select defaultValue="" onChange={e => mapSku(v, e.target.value)} style={{ background: 'var(--bg)', border: '1px solid #f59e0b55', borderRadius: 6, padding: '6px 8px', color: C.text, fontSize: 12, maxWidth: 200 }}>
-                    <option value="">— اختر الصنف —</option>
-                    {products.map(p => <option key={p._id} value={p._id}>{p.name}</option>)}
-                  </select>
+                  <ProductPicker products={products} onSelect={(id) => mapSku(v, id)} borderColor="#f59e0b55" />
                   {can('products') && <Btn size="sm" variant="ghost" onClick={() => createProduct(r)}>+ صنف جديد</Btn>}
                 </div>
               ) },
