@@ -14,6 +14,7 @@ const SECTIONS = [
   ] },
   { title: 'العمليات', items: [
     { path: '/shipments',   icon: '📦', label: 'الشحنات والتسليم',   perm: 'shipments:read' },
+    { path: '/customers',   icon: '🏪', label: 'العملاء',            perm: 'customers:read' },
   ] },
   { title: 'مركز أمازون', items: [
     { path: '/amazon?tab=overview', icon: '🛒', label: 'نظرة عامة',       perm: 'amazon:read' },

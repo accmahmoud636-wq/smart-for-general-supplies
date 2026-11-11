@@ -49,9 +49,25 @@ supRouter.delete('/:id', auth, permit('suppliers'), async (req, res) => {
 // ═══════════════════════════════════════════════
 const custRouter = require('express').Router();
 
+// العملاء الأساسيين (منصات البيع) بيتضافوا مرة واحدة — ولو اتحذفوا بعد كده مايرجعوش
+const DEFAULT_CUSTOMERS = [['أمازون', 'amazon'], ['نون', 'noon'], ['جوميا', 'jumia']];
+let seeded = false;
+async function seedCustomers() {
+  if (seeded) return;
+  const Setting = require('../models/Setting');
+  if (!(await Setting.findOne({ key: 'customers_seeded' }).lean())) {
+    for (const [name, platform] of DEFAULT_CUSTOMERS)
+      if (!(await Customer.findOne({ $or: [{ platform }, { name }] }).lean())) await Customer.create({ name, platform });
+    await Setting.findOneAndUpdate({ key: 'customers_seeded' }, { key: 'customers_seeded', value: true }, { upsert: true });
+  }
+  seeded = true;
+}
+const PLATFORM_ORDER = { amazon: 0, noon: 1, jumia: 2, other: 3 };
+
 custRouter.get('/', auth, async (req, res) => {
-  const custs = await Customer.find().sort('-createdAt');
-  res.json(custs);
+  await seedCustomers();
+  const custs = await Customer.find().lean();
+  res.json(custs.sort((a, b) => (PLATFORM_ORDER[a.platform] ?? 3) - (PLATFORM_ORDER[b.platform] ?? 3) || String(a.createdAt).localeCompare(String(b.createdAt))));
 });
 custRouter.post('/', auth, permit('customers'), async (req, res) => {
   try { res.status(201).json(await Customer.create(req.body)); }

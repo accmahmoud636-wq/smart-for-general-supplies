@@ -78,33 +78,56 @@ export function Suppliers() {
 // ═══════════════════════════════════════════════════════════
 // CUSTOMERS
 // ═══════════════════════════════════════════════════════════
+const PLATFORM_OPTS = [['amazon', 'أمازون', '#f59e0b'], ['noon', 'نون', '#eab308'], ['jumia', 'جوميا', '#f97316'], ['other', 'عميل آخر', '#6366f1']];
 export function Customers() {
   const { can } = useAuth();
+  const edit = can('customers');
   const [items, setItems] = useState([]); const [modal, setModal] = useState(false);
-  const [form, setForm] = useState({ name:'', amazonId:'', email:'', phone:'', country:'', notes:'' }); const [editing, setEditing] = useState(null);
+  const empty = { name:'', platform:'other', phone:'', email:'', country:'', notes:'', active: true };
+  const [form, setForm] = useState(empty); const [editing, setEditing] = useState(null);
   const load = () => api.get('/customers').then(r => setItems(r.data)).catch(() => toast.error('خطأ'));
   useEffect(() => { load(); }, []);
-  const openNew = () => { setEditing(null); setForm({ name:'', amazonId:'', email:'', phone:'', country:'' }); setModal(true); };
-  const openEdit = (item) => { setEditing(item._id); setForm({...item}); setModal(true); };
-  const save = async () => { try { if (editing) await api.put(`/customers/${editing}`, form); else await api.post('/customers', form); toast.success('تم'); setModal(false); load(); } catch(e){ toast.error(e.response?.data?.message||'خطأ'); } };
+  const openNew = () => { setEditing(null); setForm(empty); setModal(true); };
+  const openEdit = (item) => { setEditing(item._id); setForm({ ...empty, ...item }); setModal(true); };
+  const save = async () => {
+    if (!form.name.trim()) { toast.error('اسم العميل مطلوب'); return; }
+    try { if (editing) await api.put(`/customers/${editing}`, form); else await api.post('/customers', form); toast.success('تم الحفظ'); setModal(false); load(); }
+    catch(e){ toast.error(e.response?.data?.message||'خطأ'); }
+  };
+  const toggle = async (r) => { await api.put(`/customers/${r._id}`, { active: r.active === false }); load(); };
+  const del = async (r) => { if (!confirm(`حذف العميل «${r.name}»؟`)) return; await api.delete(`/customers/${r._id}`); toast.success('تم الحذف'); load(); };
+  const P = Object.fromEntries(PLATFORM_OPTS.map(([k, l, c]) => [k, { l, c }]));
   const cols = [
-    { key:'name', title:'العميل', render:v=><span style={{fontWeight:600}}>{v}</span> },
-    { key:'amazonId', title:'Amazon ID' }, { key:'country', title:'الدولة' }, { key:'phone', title:'الهاتف' },
-    { key:'_id', title:'إجراءات', render:(_,r) => can('customers') && <Btn size="sm" variant="ghost" onClick={() => openEdit(r)}>✏️</Btn> }
+    { key:'name', title:'العميل', render:(v, r) => <span style={{ fontWeight:700, opacity: r.active === false ? 0.5 : 1 }}>{v}</span> },
+    { key:'platform', title:'النوع', render:v => <Badge color={P[v]?.c || '#6366f1'}>{P[v]?.l || 'عميل آخر'}</Badge> },
+    { key:'phone', title:'الهاتف', render:v => v || '—' },
+    { key:'notes', title:'ملاحظات', render:v => <span style={{ fontSize:12, color:'var(--sub)' }}>{v || '—'}</span> },
+    { key:'active', title:'الحالة', render:v => <Badge color={v === false ? '#64748b' : '#10b981'}>{v === false ? 'موقوف' : 'نشط'}</Badge> },
+    { key:'_id', title:'', render:(_,r) => edit && <div style={{ display:'flex', gap:6 }}>
+      <Btn size="sm" variant="ghost" onClick={() => openEdit(r)}>تعديل</Btn>
+      <Btn size="sm" variant="ghost" onClick={() => toggle(r)}>{r.active === false ? 'تفعيل' : 'إيقاف'}</Btn>
+      <Btn size="sm" variant="ghost" onClick={() => del(r)}>🗑️</Btn>
+    </div> }
   ];
   return (
     <div>
-      <PageHeader title="العملاء" icon="👥" actions={can('customers') && [<Btn key="a" onClick={openNew}>+ إضافة عميل</Btn>]} />
-      <Card><Table columns={cols} data={items} /></Card>
+      <PageHeader title="العملاء" icon="🏪" actions={edit && [<Btn key="a" onClick={openNew}>+ إضافة عميل</Btn>]} />
+      <Card style={{ marginBottom: 14, fontSize: 13, color: 'var(--sub)' }}>العملاء النشطون يظهرون للاختيار عند إنشاء كل شحنة. المطابقة بتقرير أمازون تخص العملاء من نوع «أمازون».</Card>
+      <Card style={{ padding: 0 }}><Table columns={cols} data={items} /></Card>
       <Modal open={modal} onClose={() => setModal(false)} title={editing ? 'تعديل عميل' : 'عميل جديد'} width={500}>
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'0 16px'}}>
           <div style={{gridColumn:'1/-1'}}><Input label="الاسم" value={form.name} onChange={v=>setForm({...form,name:v})} required /></div>
-          <Input label="Amazon ID" value={form.amazonId||''} onChange={v=>setForm({...form,amazonId:v})} />
-          <Input label="الدولة" value={form.country||''} onChange={v=>setForm({...form,country:v})} />
+          <div style={{gridColumn:'1/-1', marginBottom: 14}}>
+            <div style={{ fontSize: 13, color: 'var(--sub)', marginBottom: 6 }}>النوع</div>
+            <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+              {PLATFORM_OPTS.map(([k, l, c]) => <button key={k} type="button" onClick={() => setForm({ ...form, platform: k })} style={{ padding:'7px 14px', borderRadius:8, cursor:'pointer', fontWeight:700, fontSize:13, background: form.platform === k ? c + '2e' : 'transparent', border:`1px solid ${form.platform === k ? c : 'var(--border)'}`, color: form.platform === k ? c : 'var(--sub)' }}>{l}</button>)}
+            </div>
+          </div>
           <Input label="الهاتف" value={form.phone||''} onChange={v=>setForm({...form,phone:v})} />
           <Input label="البريد" type="email" value={form.email||''} onChange={v=>setForm({...form,email:v})} />
+          <div style={{gridColumn:'1/-1'}}><Input label="ملاحظات" value={form.notes||''} onChange={v=>setForm({...form,notes:v})} /></div>
         </div>
-        <div style={{display:'flex',gap:8,justifyContent:'flex-end',marginTop:8}}><Btn variant="ghost" onClick={()=>setModal(false)}>إلغاء</Btn><Btn onClick={save}>💾 حفظ</Btn></div>
+        <div style={{display:'flex',gap:8,justifyContent:'flex-end',marginTop:8}}><Btn variant="ghost" onClick={()=>setModal(false)}>إلغاء</Btn><Btn onClick={save}>حفظ</Btn></div>
       </Modal>
     </div>
   );

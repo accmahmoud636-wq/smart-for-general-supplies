@@ -13,8 +13,12 @@ const { mapHeaders, num, parseDate, kindFromType, stageFromAmazon, ORDER_ALIASES
 
 const CAN = permit('shipments');
 const READ = permit('shipments:read');
-const SALE_REASON = 'خروج لأمازون';      // نفس السبب اللي بيقرأه تبويب «مطابقة الخروج» في مركز أمازون
-const RETURN_REASON = 'مرتجع أمازون';
+// سبب الحركة في المخزون حسب العميل: «خروج لأمازون» / «مرتجع نون» ...
+const reasonFor = (type, customer) => {
+  const n = customer?.platform === 'amazon' ? 'أمازون' : customer?.name || 'أمازون';
+  return type === 'return' ? `مرتجع ${n}` : `خروج ل${n}`;
+};
+const isAmazon = (s) => !s.customer || s.customer.platform === 'amazon';
 
 // ─── الموظفين ───────────────────────────────────────────────────
 router.get('/employees', auth, async (req, res) => {
@@ -50,12 +54,13 @@ const totals = (items) => ({
 router.get('/', auth, READ, async (req, res) => {
   const q = {};
   if (req.query.status) q.status = req.query.status;
-  const list = await Shipment.find(q).populate('employee', 'name code').sort('-createdAt').limit(300).lean();
+  if (req.query.customer) q.customer = req.query.customer;
+  const list = await Shipment.find(q).populate('employee', 'name code').populate('customer', 'name platform').sort('-createdAt').limit(300).lean();
   res.json(list.map(s => ({ ...s, ...totals(s.items), items: undefined, match: s.match?.fileName ? { fileName: s.match.fileName, result: s.match.result, uploadedAt: s.match.uploadedAt } : null })));
 });
 
 router.get('/:id', auth, READ, async (req, res) => {
-  const s = await Shipment.findById(req.params.id).populate('employee', 'name code').populate('items.product', 'name stock barcode').lean();
+  const s = await Shipment.findById(req.params.id).populate('employee', 'name code').populate('customer', 'name platform').populate('items.product', 'name stock barcode').lean();
   if (!s) return res.status(404).json({ message: 'الشحنة غير موجودة' });
   res.json(s);
 });
@@ -86,7 +91,7 @@ router.post('/', auth, CAN, async (req, res) => {
     const last = await Shipment.findOne({ no: /^SH-/ }).sort('-no').select('no').lean();
     const no = 'SH-' + String(last ? parseInt(last.no.slice(3)) + 1 : 1).padStart(5, '0');
     const s = await Shipment.create({
-      no, employee: req.body.employee || undefined, notes: req.body.notes || '',
+      no, employee: req.body.employee || undefined, customer: req.body.customer || undefined, notes: req.body.notes || '',
       items: await cleanItems(req.body.items), createdBy: req.user._id
     });
     res.status(201).json(s);
@@ -99,6 +104,7 @@ router.put('/:id', auth, CAN, async (req, res) => {
     if (!s) return res.status(404).json({ message: 'الشحنة غير موجودة' });
     if (s.status !== 'draft') return res.status(400).json({ message: 'لا يمكن تعديل شحنة مُرحّلة' });
     if (req.body.employee !== undefined) s.employee = req.body.employee || undefined;
+    if (req.body.customer !== undefined) s.customer = req.body.customer || undefined;
     if (req.body.notes !== undefined) s.notes = req.body.notes;
     if (req.body.items) s.items = await cleanItems(req.body.items);
     await s.save();
@@ -117,10 +123,11 @@ router.delete('/:id', auth, CAN, async (req, res) => {
 // ترحيل: المبيعات تتخصم من المخزون والمرتجع يرجع
 router.post('/:id/post', auth, CAN, async (req, res) => {
   try {
-    const s = await Shipment.findById(req.params.id);
+    const s = await Shipment.findById(req.params.id).populate('customer', 'name platform');
     if (!s) return res.status(404).json({ message: 'الشحنة غير موجودة' });
     if (s.status !== 'draft') return res.status(400).json({ message: 'تم ترحيل الشحنة مسبقاً' });
     if (!s.employee) return res.status(400).json({ message: 'يلزم تسجيل الموظف أولاً' });
+    if (!s.customer) return res.status(400).json({ message: 'يُرجى اختيار العميل (أمازون / نون / جوميا ...)' });
     if (!s.items.length) return res.status(400).json({ message: 'الشحنة لا تحتوي على أصناف' });
 
     const prods = await Product.find({ _id: { $in: s.items.map(i => i.product) } });
@@ -149,7 +156,7 @@ router.post('/:id/post', auth, CAN, async (req, res) => {
       await p.save();
       await StockMovement.create({
         product: p._id, type: i.type === 'return' ? 'return' : 'out', qty: i.qty, before, after: p.stock,
-        reason: i.type === 'return' ? RETURN_REASON : SALE_REASON, reference: s.no, createdBy: req.user._id
+        reason: reasonFor(i.type, s.customer), reference: s.no, createdBy: req.user._id
       });
     }
     for (const i of damaged) {
@@ -234,9 +241,10 @@ async function computeMatch(s) {
 
 router.post('/:id/match', auth, CAN, async (req, res) => {
   try {
-    const s = await Shipment.findById(req.params.id).populate('items.product', 'name');
+    const s = await Shipment.findById(req.params.id).populate('items.product', 'name').populate('customer', 'name platform');
     if (!s) return res.status(404).json({ message: 'الشحنة غير موجودة' });
     if (s.status !== 'posted') return res.status(400).json({ message: 'يلزم ترحيل الشحنة قبل المطابقة' });
+    if (!isAmazon(s)) return res.status(400).json({ message: `المطابقة بتقرير أمازون لشحنات أمازون فقط — هذه شحنة ${s.customer.name}` });
     const file = readAmazonFile(req.body.rows || []);
     if (!file) return res.status(400).json({ message: 'تعذّرت قراءة الملف — يُرجى رفع تقرير المعاملات أو تقرير الطلبات من أمازون', headers: (req.body.rows?.[0] || []).slice(0, 30) });
     // نفس الملف بيتسجل كمان في مركز أمازون (الطلبات/المعاملات) عشان الربحية والتسويات — من غير تكرار

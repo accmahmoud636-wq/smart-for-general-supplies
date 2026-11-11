@@ -24,6 +24,8 @@ const Supplier = mongoose.model('Supplier', supplierSchema);
 // ─── CUSTOMER ─────────────────────────────────────────────────
 const customerSchema = new Schema({
   name:          { type: String, required: true, trim: true },
+  platform:      { type: String, enum: ['amazon', 'noon', 'jumia', 'other'], default: 'other' }, // منصة البيع
+  active:        { type: Boolean, default: true },
   amazonId:      { type: String, default: '' },
   email:         { type: String, default: '' },
   phone:         { type: String, default: '' },

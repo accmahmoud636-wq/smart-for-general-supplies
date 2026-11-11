@@ -18,6 +18,13 @@ const DEST = {
   main:    { label: 'المخزن الرئيسي', color: '#10b981' },
   damaged: { label: 'مخزن التوالف',   color: '#f59e0b' },
 };
+// ألوان وشعارات منصات البيع
+export const PLATFORMS = {
+  amazon: { label: 'أمازون', color: '#f59e0b', icon: '🟠' },
+  noon:   { label: 'نون',    color: '#eab308', icon: '🟡' },
+  jumia:  { label: 'جوميا',  color: '#f97316', icon: '🟧' },
+  other:  { label: 'أخرى',   color: '#6366f1', icon: '🔷' },
+};
 const sameRow = (a, b) => a.product === b.product && a.type === b.type && (a.dest || 'main') === (b.dest || 'main');
 const RESULT = {
   matched: { label: 'مطابقة', color: '#10b981' },
@@ -75,11 +82,12 @@ function ShipmentList({ onNew, onOpen, initialFilter = '' }) {
         <Table onRow={onOpen} columns={[
           { key: 'no', title: 'رقم الشحنة', render: v => <b style={{ fontFamily: 'monospace' }}>{v}</b> },
           { key: 'createdAt', title: 'التاريخ', render: v => fmtDate(v) },
+          { key: 'customer', title: 'العميل', render: v => v ? <Badge color={PLATFORMS[v.platform]?.color || '#6366f1'}>{v.name}</Badge> : <span style={{ color: C.muted }}>—</span> },
           { key: 'employee', title: 'الموظف', render: v => v?.name || <span style={{ color: '#f87171' }}>—</span> },
           { key: 'saleQty', title: 'مبيعات', render: v => v ? <b>{v}</b> : '—' },
           { key: 'returnQty', title: 'مرتجعات', render: (v, r) => v ? <span><b style={{ color: '#f87171' }}>{v}</b>{r.damagedQty > 0 && <span style={{ fontSize: 11, color: '#f59e0b' }}> (تالف {r.damagedQty})</span>}</span> : '—' },
           { key: 'status', title: 'الحالة', render: v => v === 'draft' ? <Badge color="#f59e0b">مسودة</Badge> : <Badge color="#3b82f6">مُرحّلة</Badge> },
-          { key: 'match', title: 'المطابقة', render: (v, r) => r.status === 'draft' ? '—' : v ? <Badge color={RESULT[v.result]?.color}>{RESULT[v.result]?.label}</Badge> : <Badge color="#64748b">بانتظار تقرير أمازون</Badge> },
+          { key: 'match', title: 'المطابقة', render: (v, r) => r.status === 'draft' ? '—' : r.customer && r.customer.platform !== 'amazon' ? <span style={{ color: C.muted, fontSize: 12 }}>لا تنطبق</span> : v ? <Badge color={RESULT[v.result]?.color}>{RESULT[v.result]?.label}</Badge> : <Badge color="#64748b">بانتظار تقرير أمازون</Badge> },
         ]} data={list} />
       </Card>
     </div>
@@ -96,6 +104,8 @@ function ShipmentEditor({ id: initialId, onBack, onPosted }) {
   const setItems = (v) => { itemsRef.current = v; setItemsState(v); };
   const [mode, setMode] = useState('sale');
   const [employees, setEmployees] = useState([]);
+  const [customers, setCustomers] = useState([]);
+  const [customer, setCustomer] = useState(null);
   const [code, setCode] = useState('');
   const [flash, setFlash] = useState(null);
   const [dirty, setDirty] = useState(false);
@@ -106,8 +116,9 @@ function ShipmentEditor({ id: initialId, onBack, onPosted }) {
 
   useEffect(() => {
     api.get('/shipments/employees').then(r => setEmployees(r.data.filter(e => e.active))).catch(() => {});
+    api.get('/customers').then(r => setCustomers(r.data.filter(c => c.active !== false))).catch(() => {});
     if (initialId) api.get(`/shipments/${initialId}`).then(({ data: s }) => {
-      setNo(s.no); setEmployee(s.employee || null);
+      setNo(s.no); setEmployee(s.employee || null); setCustomer(s.customer?._id || null);
       setItems(s.items.map(i => ({ product: i.product?._id, name: i.product?.name || i.name, barcode: i.product?.barcode || i.barcode, stock: i.product?.stock, qty: i.qty, type: i.type, dest: i.dest || 'main', note: i.note || '', photos: i.photos || [] })));
     }).catch(e => toast.error(err(e)));
   }, [initialId]);
@@ -182,7 +193,7 @@ function ShipmentEditor({ id: initialId, onBack, onPosted }) {
     if (!employee) { say(false, 'يُرجى مسح بطاقة الموظف أولاً'); return null; }
     setBusy(true);
     try {
-      const body = { employee: employee._id, items: items.map(i => ({ product: i.product, qty: i.qty, type: i.type, dest: i.dest, note: i.note, photos: i.photos })) };
+      const body = { employee: employee._id, customer: customer || '', items: items.map(i => ({ product: i.product, qty: i.qty, type: i.type, dest: i.dest, note: i.note, photos: i.photos })) };
       const { data } = id ? await api.put(`/shipments/${id}`, body) : await api.post('/shipments', body);
       setId(data._id); setNo(data.no); setDirty(false);
       if (!quiet) toast.success(`تم حفظ الشحنة ${data.no}`);
@@ -193,7 +204,8 @@ function ShipmentEditor({ id: initialId, onBack, onPosted }) {
 
   const post = async (force = false) => {
     if (!items.length) { say(false, 'الشحنة لا تحتوي على أصناف'); return; }
-    if (!force && !confirm(`تأكيد ترحيل الشحنة؟\nالمبيعات: ${saleQty} وحدة (تُخصم من المخزون)\nالمرتجعات السليمة: ${returnQty - damagedQty} وحدة (تُضاف إلى المخزون الرئيسي)${damagedQty ? `\nالمرتجعات التالفة: ${damagedQty} وحدة (تُحوَّل إلى مخزن التوالف)` : ''}\n\nلا يمكن تعديل الشحنة بعد الترحيل.`)) return;
+    if (!customer) { say(false, 'يُرجى اختيار العميل (أمازون / نون / جوميا ...) قبل الترحيل'); return; }
+    if (!force && !confirm(`تأكيد ترحيل الشحنة — العميل: ${customers.find(c => c._id === customer)?.name}؟\nالمبيعات: ${saleQty} وحدة (تُخصم من المخزون)\nالمرتجعات السليمة: ${returnQty - damagedQty} وحدة (تُضاف إلى المخزون الرئيسي)${damagedQty ? `\nالمرتجعات التالفة: ${damagedQty} وحدة (تُحوَّل إلى مخزن التوالف)` : ''}\n\nلا يمكن تعديل الشحنة بعد الترحيل.`)) return;
     const sid = await save(true);
     if (!sid) return;
     setBusy(true);
@@ -230,6 +242,17 @@ function ShipmentEditor({ id: initialId, onBack, onPosted }) {
         {employee
           ? <div><div style={{ fontSize: 12, color: C.muted }}>الموظف</div><div style={{ fontWeight: 800, fontSize: 18 }}>{employee.name} <span style={{ fontSize: 12, color: C.muted, fontFamily: 'monospace' }}>{employee.code}</span></div></div>
           : <div style={{ fontWeight: 700, color: '#fbbf24' }}>يُرجى مسح بطاقة الموظف للبدء</div>}
+      </Card>
+
+      {/* العميل */}
+      <Card style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', borderColor: customer ? '#10b98155' : '#f59e0b88' }}>
+        <span style={{ fontSize: 26 }}>🏪</span>
+        <div style={{ fontSize: 13, color: C.muted, fontWeight: 700 }}>العميل</div>
+        <select value={customer || ''} onChange={e => { setCustomer(e.target.value || null); setDirty(true); setTimeout(() => ref.current?.focus(), 0); }}
+          style={{ flex: 1, minWidth: 200, background: 'var(--bg)', border: `2px solid ${customer ? (PLATFORMS[customers.find(c => c._id === customer)?.platform]?.color || C.border) : '#f59e0b'}`, borderRadius: 10, padding: '11px 12px', color: C.text, fontSize: 16, fontWeight: 700, cursor: 'pointer', outline: 'none' }}>
+          <option value="">— اختر العميل —</option>
+          {customers.map(c => <option key={c._id} value={c._id}>{c.name}</option>)}
+        </select>
       </Card>
 
       {/* نوع المسح */}
@@ -376,12 +399,19 @@ function ShipmentMatch({ id, onBack }) {
       <PageHeader title={`مطابقة شحنة ${s.no}`} icon="⚖️" actions={[<Btn key="b" variant="ghost" onClick={onBack}>رجوع إلى الشحنات</Btn>]} />
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(180px,1fr))', gap: 12, marginBottom: 14 }}>
+        <StatCard label="العميل" value={s.customer?.name || '—'} icon="🏪" color={PLATFORMS[s.customer?.platform]?.color || '#6366f1'} />
         <StatCard label="الموظف" value={s.employee?.name || '—'} icon="👤" color="#8b5cf6" sub={s.postedAt ? `تاريخ الترحيل ${fmtDate(s.postedAt)}` : ''} />
         <StatCard label="المبيعات المسجّلة" value={s.items.filter(i => i.type === 'sale').reduce((t, i) => t + i.qty, 0)} icon="📦" color="#10b981" />
         <StatCard label="المرتجعات المسجّلة" value={s.items.filter(i => i.type === 'return').reduce((t, i) => t + i.qty, 0)} icon="↩️" color="#ef4444"
           sub={(() => { const d = s.items.filter(i => i.type === 'return' && i.dest === 'damaged').reduce((t, i) => t + i.qty, 0); return d ? `منها ${d} تالف (مخزن التوالف)` : ''; })()} />
       </div>
 
+      {s.customer && s.customer.platform !== 'amazon' ? (
+        <Card style={{ marginBottom: 14, fontSize: 14, color: C.sub, lineHeight: 1.9 }}>
+          شحنة <b style={{ color: PLATFORMS[s.customer.platform]?.color }}>{s.customer.name}</b> — تم الترحيل وتحديث المخزون.
+          المطابقة بتقرير أمازون تخص شحنات أمازون فقط.
+        </Card>
+      ) : <>
       <Card style={{ marginBottom: 14 }}>
         <div style={{ fontWeight: 700, marginBottom: 6 }}>رفع تقرير أمازون</div>
         <div style={{ fontSize: 12, color: C.sub, marginBottom: 12, lineHeight: 1.8 }}>
@@ -449,6 +479,7 @@ function ShipmentMatch({ id, onBack }) {
             ]} data={m.unmapped.map(u => ({ ...u, _id: u.sku }))} />
           </Card>
         )}
+      </>}
       </>}
     </div>
   );

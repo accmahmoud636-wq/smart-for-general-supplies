@@ -27,6 +27,7 @@ const shipmentSchema = new Schema({
   no:        { type: String, required: true, unique: true },     // SH-00001
   date:      { type: Date, default: Date.now },
   employee:  { type: Schema.Types.ObjectId, ref: 'Employee' },
+  customer:  { type: Schema.Types.ObjectId, ref: 'Customer' },   // أمازون / نون / جوميا ...
   items:     [shipmentItemSchema],
   notes:     { type: String, default: '' },
   status:    { type: String, enum: ['draft', 'posted'], default: 'draft' },

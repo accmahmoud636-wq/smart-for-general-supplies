@@ -15,9 +15,11 @@ router.get('/', auth, async (req, res) => {
     const out = {};
 
     if (can('shipments:read')) {
-      const recent = await Shipment.find({ $or: [{ status: 'draft' }, { status: 'posted', 'match.result': { $ne: 'matched' } }] })
-        .populate('employee', 'name').sort('-createdAt').limit(100).lean();
-      const brief = (s) => ({ _id: s._id, no: s.no, employee: s.employee?.name, date: s.createdAt, qty: s.items.reduce((t, i) => t + i.qty, 0) });
+      const recent = (await Shipment.find({ $or: [{ status: 'draft' }, { status: 'posted', 'match.result': { $ne: 'matched' } }] })
+        .populate('employee', 'name').populate('customer', 'name platform').sort('-createdAt').limit(100).lean())
+        // المطابقة بتقرير أمازون: شحنات أمازون بس (أو القديمة اللي من غير عميل)
+        .filter(s => s.status === 'draft' || !s.customer || s.customer.platform === 'amazon');
+      const brief = (s) => ({ _id: s._id, no: s.no, employee: s.employee?.name, customer: s.customer?.name, date: s.createdAt, qty: s.items.reduce((t, i) => t + i.qty, 0) });
       out.shipments = {
         drafts: recent.filter(s => s.status === 'draft').map(brief),
         toMatch: recent.filter(s => s.status === 'posted' && !s.match?.fileName).map(brief),
