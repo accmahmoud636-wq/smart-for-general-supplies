@@ -4,11 +4,13 @@ import { useAuth } from '../context/AuthContext';
 import api from '../utils/api';
 import { C_THEME as C, THEME, THEME_KEY, getMode, setMode } from './UI';
 import Assistant from './Assistant';
+import { SeasonBanner } from '../pages/Seasons';
 
 // الشريط الجانبي: أقسام بالترتيب اللي بيتشغّل بيه الشغل كل يوم
 const SECTIONS = [
   { title: null, items: [
     { path: '/',            icon: '🏠', label: 'الرئيسية',           perm: null },
+    { path: '/seasons',     icon: '🗓️', label: 'المواسم',            perm: null },
   ] },
   { title: 'العمليات', items: [
     { path: '/shipments',   icon: '📦', label: 'الشحنات والتسليم',   perm: 'shipments:read' },
@@ -156,7 +158,7 @@ export default function Layout({ children }) {
             <ModeBtn />
           </div>
         )}
-        <div style={{ padding: mobile ? '14px 12px 84px' : '24px 24px 90px' }}>{children}</div>
+        <div style={{ padding: mobile ? '14px 12px 84px' : '24px 24px 90px' }}><SeasonBanner />{children}</div>
       </div>
       <Assistant />
     </div>
