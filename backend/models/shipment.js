@@ -16,7 +16,11 @@ const shipmentItemSchema = new Schema({
   name:    { type: String, default: '' },
   barcode: { type: String, default: '' },
   qty:     { type: Number, required: true, min: 1 },
-  type:    { type: String, enum: ['sale', 'return'], default: 'sale' }
+  type:    { type: String, enum: ['sale', 'return'], default: 'sale' },
+  // للمرتجع بس: يرجع المخزن الرئيسي (افتراضي) ولا مخزن التوالف
+  dest:    { type: String, enum: ['main', 'damaged'], default: 'main' },
+  note:    { type: String, default: '' },
+  photos:  [{ type: Schema.Types.ObjectId, ref: 'DamagedPhoto' }]
 }, { _id: false });
 
 const shipmentSchema = new Schema({

@@ -4,6 +4,7 @@
 const router = require('express').Router();
 const { Product, Category, Supplier, StockMovement, Sale, Purchase, Expense } = require('../models/index');
 const { Shipment } = require('../models/shipment');
+const { Damaged, DamagedPhoto } = require('../models/damaged');
 const { AmazonOrder, AmazonTransaction, AmazonSkuMap } = require('../models/amazon');
 const { auth, permit, superAdmin } = require('../middleware/auth');
 const { mapHeaders, num } = require('./amazon')._test;
@@ -12,7 +13,7 @@ const { mapHeaders, num } = require('./amazon')._test;
 const SCOPES = {
   products:  { label: 'الأصناف والمخزون',       models: [Product] },
   movements: { label: 'حركات المخزون',           models: [StockMovement] },
-  shipments: { label: 'الشحنات',                 models: [Shipment] },
+  shipments: { label: 'الشحنات ومخزن التوالف',   models: [Shipment, Damaged, DamagedPhoto] },
   amazon:    { label: 'بيانات أمازون وربط SKU',   models: [AmazonOrder, AmazonTransaction, AmazonSkuMap] },
   sales:     { label: 'فواتير البيع',              models: [Sale] },
   purchases: { label: 'فواتير الشراء',             models: [Purchase] },

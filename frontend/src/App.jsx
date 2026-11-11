@@ -10,6 +10,7 @@ import { Categories, Suppliers, Customers, Expenses, StockPage, Reports } from '
 import Settings from './pages/Settings';
 import AmazonHub from './pages/AmazonHub';
 import Shipments from './pages/Shipments';
+import Damaged from './pages/Damaged';
 
 function PrivateRoute({ children }) {
   const { user, loading } = useAuth();
@@ -27,6 +28,7 @@ function AppRoutes() {
       <Route path="/"           element={<PrivateRoute><Home /></PrivateRoute>} />
       <Route path="/shipments"  element={<PrivateRoute><Shipments /></PrivateRoute>} />
       <Route path="/scan"       element={<Navigate to="/shipments" />} />
+      <Route path="/damaged"    element={<PrivateRoute><Damaged /></PrivateRoute>} />
       <Route path="/amazon"     element={<PrivateRoute><AmazonHub /></PrivateRoute>} />
       <Route path="/products"   element={<PrivateRoute><Products /></PrivateRoute>} />
       <Route path="/categories" element={<PrivateRoute><Categories /></PrivateRoute>} />

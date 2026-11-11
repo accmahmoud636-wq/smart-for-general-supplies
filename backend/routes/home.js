@@ -4,6 +4,7 @@
 const router = require('express').Router();
 const { Product } = require('../models/index');
 const { Shipment } = require('../models/shipment');
+const { Damaged } = require('../models/damaged');
 const { AmazonOrder, AmazonTransaction } = require('../models/amazon');
 const { auth } = require('../middleware/auth');
 const { buildResolver } = require('./amazon');
@@ -21,6 +22,8 @@ router.get('/', auth, async (req, res) => {
         drafts: recent.filter(s => s.status === 'draft').map(brief),
         toMatch: recent.filter(s => s.status === 'posted' && !s.match?.fileName).map(brief),
         diff: recent.filter(s => s.status === 'posted' && s.match?.result === 'diff').map(brief),
+        damaged: (await Damaged.find({ status: 'pending' }).select('name qty shipmentNo').sort('-createdAt').limit(100).lean())
+          .map(d => ({ _id: d._id, name: d.name, qty: d.qty, no: d.shipmentNo })),
       };
     }
 

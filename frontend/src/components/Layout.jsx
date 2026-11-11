@@ -21,6 +21,7 @@ const SECTIONS = [
     { path: '/products',    icon: '🏷️', label: 'المنتجات',           perm: 'products:read' },
     { path: '/amazon?tab=skus',    icon: '🔗', label: 'ربط رموز SKU',  perm: 'products' },
     { path: '/stock',       icon: '📋', label: 'حركة المخزون',       perm: 'stock:read' },
+    { path: '/damaged',     icon: '⚠️', label: 'مخزن التوالف',        perm: 'stock:read' },
     { path: '/amazon?tab=reorder', icon: '🔄', label: 'إعادة الطلب',     perm: 'amazon:read' },
     { path: '/purchases',   icon: '📥', label: 'فواتير الشراء',      perm: 'purchases:read' },
     { path: '/suppliers',   icon: '🏭', label: 'الموردون',           perm: 'suppliers:read' },

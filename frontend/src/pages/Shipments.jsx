@@ -5,6 +5,7 @@ import { Card, Btn, Badge, Table, PageHeader, StatCard, fmtDate, C_THEME as C } 
 import { beep, printLabels } from '../utils/barcode';
 import { readReportFile } from '../utils/parseReport';
 import CameraScanner from '../components/CameraScanner';
+import { PhotoStrip } from '../components/Photos';
 import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
 
@@ -12,6 +13,11 @@ const TYPES = {
   sale:   { label: 'مبيعات', color: '#10b981', icon: '' },
   return: { label: 'مرتجع',  color: '#ef4444', icon: '' },
 };
+const DEST = {
+  main:    { label: 'المخزن الرئيسي', color: '#10b981' },
+  damaged: { label: 'مخزن التوالف',   color: '#f59e0b' },
+};
+const sameRow = (a, b) => a.product === b.product && a.type === b.type && (a.dest || 'main') === (b.dest || 'main');
 const RESULT = {
   matched: { label: 'مطابقة', color: '#10b981' },
   diff:    { label: 'يوجد فروقات', color: '#ef4444' },
@@ -56,7 +62,7 @@ function ShipmentList({ onNew, onOpen, initialFilter = '' }) {
       ]} />
       <Card style={{ marginBottom: 14, fontSize: 13, color: C.sub, lineHeight: 1.9 }}>
         <b>دورة العمل:</b> ١. إنشاء شحنة وتسجيل الموظف ثم مسح الأصناف (مبيعات أو مرتجعات) وحفظها.
-        &nbsp;٢. ترحيل الشحنة: تُخصم المبيعات من المخزون وتُضاف المرتجعات إليه.
+        &nbsp;٢. ترحيل الشحنة: تُخصم المبيعات من المخزون، وتُضاف المرتجعات السليمة إليه، وتُحوَّل التالفة إلى مخزن التوالف.
         &nbsp;٣. رفع تقرير أمازون لمطابقة الكميات صنفاً بصنف.
       </Card>
       <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
@@ -70,7 +76,7 @@ function ShipmentList({ onNew, onOpen, initialFilter = '' }) {
           { key: 'createdAt', title: 'التاريخ', render: v => fmtDate(v) },
           { key: 'employee', title: 'الموظف', render: v => v?.name || <span style={{ color: '#f87171' }}>—</span> },
           { key: 'saleQty', title: 'مبيعات', render: v => v ? <b>{v}</b> : '—' },
-          { key: 'returnQty', title: 'مرتجعات', render: v => v ? <b style={{ color: '#f87171' }}>{v}</b> : '—' },
+          { key: 'returnQty', title: 'مرتجعات', render: (v, r) => v ? <span><b style={{ color: '#f87171' }}>{v}</b>{r.damagedQty > 0 && <span style={{ fontSize: 11, color: '#f59e0b' }}> (تالف {r.damagedQty})</span>}</span> : '—' },
           { key: 'status', title: 'الحالة', render: v => v === 'draft' ? <Badge color="#f59e0b">مسودة</Badge> : <Badge color="#3b82f6">مُرحّلة</Badge> },
           { key: 'match', title: 'المطابقة', render: (v, r) => r.status === 'draft' ? '—' : v ? <Badge color={RESULT[v.result]?.color}>{RESULT[v.result]?.label}</Badge> : <Badge color="#64748b">بانتظار تقرير أمازون</Badge> },
         ]} data={list} />
@@ -101,7 +107,7 @@ function ShipmentEditor({ id: initialId, onBack, onPosted }) {
     api.get('/shipments/employees').then(r => setEmployees(r.data.filter(e => e.active))).catch(() => {});
     if (initialId) api.get(`/shipments/${initialId}`).then(({ data: s }) => {
       setNo(s.no); setEmployee(s.employee || null);
-      setItems(s.items.map(i => ({ product: i.product?._id, name: i.product?.name || i.name, barcode: i.product?.barcode || i.barcode, stock: i.product?.stock, qty: i.qty, type: i.type })));
+      setItems(s.items.map(i => ({ product: i.product?._id, name: i.product?.name || i.name, barcode: i.product?.barcode || i.barcode, stock: i.product?.stock, qty: i.qty, type: i.type, dest: i.dest || 'main', note: i.note || '', photos: i.photos || [] })));
     }).catch(e => toast.error(err(e)));
   }, [initialId]);
   useEffect(() => { ref.current?.focus(); }, [employee, mode]);
@@ -115,9 +121,10 @@ function ShipmentEditor({ id: initialId, onBack, onPosted }) {
 
   const addItem = (p, type) => {
     const list = [...itemsRef.current];
-    const i = list.findIndex(x => x.product === p._id && x.type === type);
+    const row = { product: p._id, name: p.name, barcode: p.barcode, stock: p.stock, qty: 1, type, dest: 'main', note: '', photos: [] };
+    const i = list.findIndex(x => sameRow(x, row));
     if (i >= 0) { list[i] = { ...list[i], qty: list[i].qty + 1 }; list.unshift(list.splice(i, 1)[0]); }
-    else list.unshift({ product: p._id, name: p.name, barcode: p.barcode, stock: p.stock, qty: 1, type });
+    else list.unshift(row);
     setItems(list); setDirty(true);
     return list[0].qty;
   };
@@ -143,20 +150,38 @@ function ShipmentEditor({ id: initialId, onBack, onPosted }) {
   };
 
   const setQty = (idx, q) => { const l = [...items]; l[idx] = { ...l[idx], qty: Math.max(0, q) }; setItems(l.filter(x => x.qty > 0)); setDirty(true); };
-  const setType = (idx, type) => {
+  // نقل سطر (أو جزء منه) لنوع/مخزن تاني — ولو فيه سطر مطابق يندمج معاه
+  const moveRow = (idx, patch, qty) => {
     const l = [...items];
     const cur = l[idx];
-    const j = l.findIndex((x, k) => k !== idx && x.product === cur.product && x.type === type);
-    if (j >= 0) { l[j] = { ...l[j], qty: l[j].qty + cur.qty }; l.splice(idx, 1); }
-    else l[idx] = { ...cur, type };
+    const n = Math.min(cur.qty, Math.max(1, qty ?? cur.qty));
+    const target = { ...cur, ...patch, qty: n };
+    if (target.dest !== 'damaged') { target.note = ''; target.photos = []; }
+    if (n < cur.qty) l[idx] = { ...cur, qty: cur.qty - n }; else l.splice(idx, 1);
+    const j = l.findIndex(x => sameRow(x, target));
+    if (j >= 0) l[j] = { ...l[j], qty: l[j].qty + n, photos: [...(l[j].photos || []), ...(target.photos || [])] };
+    else l.splice(Math.min(idx, l.length), 0, target);
     setItems(l); setDirty(true);
   };
+  const setType = (idx, type) => moveRow(idx, { type, dest: 'main' });
+  const setDest = (idx, dest) => {
+    const cur = items[idx];
+    let n = cur.qty;
+    if (dest === 'damaged' && cur.qty > 1) {
+      const a = prompt(`عدد الوحدات التالفة من «${cur.name}» (من ${cur.qty}):`, cur.qty);
+      if (a === null) return;
+      n = Math.floor(+a);
+      if (!(n >= 1)) return;
+    }
+    moveRow(idx, { dest }, n);
+  };
+  const patchRow = (idx, patch) => { const l = [...items]; l[idx] = { ...l[idx], ...patch }; setItems(l); setDirty(true); };
 
   const save = async (quiet) => {
     if (!employee) { say(false, 'يُرجى مسح بطاقة الموظف أولاً'); return null; }
     setBusy(true);
     try {
-      const body = { employee: employee._id, items: items.map(i => ({ product: i.product, qty: i.qty, type: i.type })) };
+      const body = { employee: employee._id, items: items.map(i => ({ product: i.product, qty: i.qty, type: i.type, dest: i.dest, note: i.note, photos: i.photos })) };
       const { data } = id ? await api.put(`/shipments/${id}`, body) : await api.post('/shipments', body);
       setId(data._id); setNo(data.no); setDirty(false);
       if (!quiet) toast.success(`تم حفظ الشحنة ${data.no}`);
@@ -167,7 +192,7 @@ function ShipmentEditor({ id: initialId, onBack, onPosted }) {
 
   const post = async (force = false) => {
     if (!items.length) { say(false, 'الشحنة لا تحتوي على أصناف'); return; }
-    if (!force && !confirm(`تأكيد ترحيل الشحنة؟\nالمبيعات: ${saleQty} وحدة (تُخصم من المخزون)\nالمرتجعات: ${returnQty} وحدة (تُضاف إلى المخزون)\n\nلا يمكن تعديل الشحنة بعد الترحيل.`)) return;
+    if (!force && !confirm(`تأكيد ترحيل الشحنة؟\nالمبيعات: ${saleQty} وحدة (تُخصم من المخزون)\nالمرتجعات السليمة: ${returnQty - damagedQty} وحدة (تُضاف إلى المخزون الرئيسي)${damagedQty ? `\nالمرتجعات التالفة: ${damagedQty} وحدة (تُحوَّل إلى مخزن التوالف)` : ''}\n\nلا يمكن تعديل الشحنة بعد الترحيل.`)) return;
     const sid = await save(true);
     if (!sid) return;
     setBusy(true);
@@ -190,6 +215,7 @@ function ShipmentEditor({ id: initialId, onBack, onPosted }) {
   const back = () => { if (dirty && !confirm('توجد تعديلات غير محفوظة. هل تريد الخروج دون حفظ؟')) return; onBack(); };
   const saleQty = items.filter(i => i.type === 'sale').reduce((s, i) => s + i.qty, 0);
   const returnQty = items.filter(i => i.type === 'return').reduce((s, i) => s + i.qty, 0);
+  const damagedQty = items.filter(i => i.type === 'return' && i.dest === 'damaged').reduce((s, i) => s + i.qty, 0);
 
   return (
     <div style={{ maxWidth: 960 }}>
@@ -237,11 +263,12 @@ function ShipmentEditor({ id: initialId, onBack, onPosted }) {
           <Card key={type} style={{ padding: 0, marginBottom: 12, borderTop: `3px solid ${T.color}` }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 14px', borderBottom: `1px solid ${C.border}` }}>
               <b style={{ color: T.color }}>{type === 'sale' ? 'المبيعات' : 'المرتجعات'}</b>
-              <span style={{ fontSize: 13, color: C.sub }}>{rows.length} صنف · {qty} وحدة</span>
+              <span style={{ fontSize: 13, color: C.sub }}>{rows.length} صنف · {qty} وحدة{type === 'return' && damagedQty > 0 && <> · <b style={{ color: DEST.damaged.color }}>تالف {damagedQty}</b></>}</span>
             </div>
             {!rows.length && <div style={{ padding: 18, textAlign: 'center', color: C.muted, fontSize: 13 }}>{type === 'sale' ? 'لم تُسجّل مبيعات بعد' : 'لا توجد مرتجعات'}</div>}
             {rows.map(({ it, i }) => (
-              <div key={it.product + it.type} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderBottom: `1px solid ${C.border}33`, flexWrap: 'wrap' }}>
+              <div key={it.product + it.type + it.dest} style={{ padding: '10px 14px', borderBottom: `1px solid ${C.border}33`, background: it.dest === 'damaged' ? '#f59e0b0d' : 'transparent' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                 <div style={{ flex: 1, minWidth: 160 }}>
                   <div style={{ fontWeight: 700 }}>{it.name}</div>
                   <div style={{ fontSize: 11, color: C.muted, fontFamily: 'monospace' }}><span dir="ltr">{it.barcode}</span>{it.stock !== undefined && ` · الرصيد ${it.stock}`}</div>
@@ -254,6 +281,23 @@ function ShipmentEditor({ id: initialId, onBack, onPosted }) {
                 <input type="number" value={it.qty} onChange={e => setQty(i, +e.target.value)} style={{ width: 64, textAlign: 'center', background: 'var(--card)', border: `1px solid ${C.border}`, borderRadius: 6, padding: 6, color: 'var(--text)', fontSize: 16, fontWeight: 800 }} />
                 <Btn size="sm" variant="ghost" onClick={() => setQty(i, it.qty + 1)}>+</Btn>
                 <Btn size="sm" variant="ghost" onClick={() => setQty(i, 0)}>🗑️</Btn>
+              </div>
+              {type === 'return' && (
+                <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
+                  {Object.entries(DEST).map(([k, d]) => (
+                    <button key={k} onClick={() => it.dest !== k && setDest(i, k)} style={{ padding: '5px 12px', borderRadius: 20, fontSize: 12, fontWeight: 700, cursor: 'pointer', background: it.dest === k ? d.color + '26' : 'transparent', border: `1px solid ${it.dest === k ? d.color : C.border}`, color: it.dest === k ? d.color : C.muted }}>
+                      {it.dest === k ? '● ' : ''}{d.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {it.dest === 'damaged' && (
+                <div style={{ display: 'flex', gap: 10, marginTop: 10, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+                  <PhotoStrip ids={it.photos} onChange={(photos) => patchRow(i, { photos })} />
+                  <input value={it.note} onChange={e => patchRow(i, { note: e.target.value })} placeholder="وصف التلف (كسر، علبة مفتوحة، ناقص قطعة...)"
+                    style={{ flex: 1, minWidth: 200, background: 'var(--bg)', border: `1px solid ${C.border}`, borderRadius: 8, padding: '9px 10px', color: 'var(--text)', fontSize: 13, outline: 'none' }} />
+                </div>
+              )}
               </div>
             ))}
           </Card>
@@ -333,7 +377,8 @@ function ShipmentMatch({ id, onBack }) {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(180px,1fr))', gap: 12, marginBottom: 14 }}>
         <StatCard label="الموظف" value={s.employee?.name || '—'} icon="👤" color="#8b5cf6" sub={s.postedAt ? `تاريخ الترحيل ${fmtDate(s.postedAt)}` : ''} />
         <StatCard label="المبيعات المسجّلة" value={s.items.filter(i => i.type === 'sale').reduce((t, i) => t + i.qty, 0)} icon="📦" color="#10b981" />
-        <StatCard label="المرتجعات المسجّلة" value={s.items.filter(i => i.type === 'return').reduce((t, i) => t + i.qty, 0)} icon="↩️" color="#ef4444" />
+        <StatCard label="المرتجعات المسجّلة" value={s.items.filter(i => i.type === 'return').reduce((t, i) => t + i.qty, 0)} icon="↩️" color="#ef4444"
+          sub={(() => { const d = s.items.filter(i => i.type === 'return' && i.dest === 'damaged').reduce((t, i) => t + i.qty, 0); return d ? `منها ${d} تالف (مخزن التوالف)` : ''; })()} />
       </div>
 
       <Card style={{ marginBottom: 14 }}>

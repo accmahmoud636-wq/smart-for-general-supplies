@@ -5,6 +5,7 @@
 const router = require('express').Router();
 const { Product, StockMovement } = require('../models/index');
 const { Employee, Shipment } = require('../models/shipment');
+const { Damaged } = require('../models/damaged');
 const { auth, permit } = require('../middleware/auth');
 const amazon = require('./amazon');
 const { buildResolver } = amazon;
@@ -42,6 +43,7 @@ router.put('/employees/:id', auth, permit('settings'), async (req, res) => {
 const totals = (items) => ({
   saleQty: items.filter(i => i.type === 'sale').reduce((s, i) => s + i.qty, 0),
   returnQty: items.filter(i => i.type === 'return').reduce((s, i) => s + i.qty, 0),
+  damagedQty: items.filter(i => i.type === 'return' && i.dest === 'damaged').reduce((s, i) => s + i.qty, 0),
   lines: items.length
 });
 
@@ -65,9 +67,13 @@ async function cleanItems(items = []) {
     const qty = Math.floor(+i.qty || 0);
     if (!i.product || qty <= 0) continue;
     const type = i.type === 'return' ? 'return' : 'sale';
-    const key = i.product + '|' + type;
+    const dest = type === 'return' && i.dest === 'damaged' ? 'damaged' : 'main';
+    const note = dest === 'damaged' ? String(i.note || '').trim() : '';
+    const photos = dest === 'damaged' && Array.isArray(i.photos) ? i.photos.filter(Boolean) : [];
+    const key = i.product + '|' + type + '|' + dest;
     const m = merged.get(key);
-    if (m) m.qty += qty; else merged.set(key, { product: i.product, type, qty });
+    if (m) { m.qty += qty; m.photos.push(...photos); if (note) m.note = m.note ? m.note + ' — ' + note : note; }
+    else merged.set(key, { product: i.product, type, dest, qty, note, photos });
   }
   const list = [...merged.values()];
   const prods = await Product.find({ _id: { $in: list.map(i => i.product) } }).select('name barcode').lean();
@@ -119,9 +125,12 @@ router.post('/:id/post', auth, CAN, async (req, res) => {
 
     const prods = await Product.find({ _id: { $in: s.items.map(i => i.product) } });
     const byId = new Map(prods.map(p => [String(p._id), p]));
+    // المرتجع التالف ما بيدخلش المخزون الرئيسي — بيروح مخزن التوالف
+    const damaged = s.items.filter(i => i.type === 'return' && i.dest === 'damaged');
+    const stockItems = s.items.filter(i => !(i.type === 'return' && i.dest === 'damaged'));
     // الرصيد بعد المرتجع والمبيعات لكل صنف
     const after = {};
-    for (const i of s.items) {
+    for (const i of stockItems) {
       const id = String(i.product);
       after[id] ??= byId.get(id)?.stock ?? 0;
       after[id] += i.type === 'return' ? i.qty : -i.qty;
@@ -131,7 +140,7 @@ router.post('/:id/post', auth, CAN, async (req, res) => {
       return res.status(409).json({ message: 'الرصيد غير كافٍ لبعض الأصناف', short });
 
     // المرتجع الأول عشان الرصيد ما يقعش بالسالب من غير داعي
-    const ordered = [...s.items].sort((a, b) => (a.type === 'return' ? 0 : 1) - (b.type === 'return' ? 0 : 1));
+    const ordered = [...stockItems].sort((a, b) => (a.type === 'return' ? 0 : 1) - (b.type === 'return' ? 0 : 1));
     for (const i of ordered) {
       const p = byId.get(String(i.product));
       if (!p) continue;
@@ -143,9 +152,18 @@ router.post('/:id/post', auth, CAN, async (req, res) => {
         reason: i.type === 'return' ? RETURN_REASON : SALE_REASON, reference: s.no, createdBy: req.user._id
       });
     }
+    for (const i of damaged) {
+      const p = byId.get(String(i.product));
+      await Damaged.create({
+        product: i.product, name: p?.name || i.name, barcode: p?.barcode || i.barcode, qty: i.qty, unitCost: p?.buyPrice || 0,
+        shipment: s._id, shipmentNo: s.no, employee: s.employee, note: i.note, photos: i.photos,
+        history: [{ status: 'pending', note: 'مرتجع تالف من الشحنة ' + s.no, by: req.user._id }], createdBy: req.user._id
+      });
+    }
     s.status = 'posted'; s.postedAt = new Date(); s.postedBy = req.user._id;
     await s.save();
-    res.json({ message: `تم ترحيل الشحنة ${s.no}`, shipment: s });
+    const dq = damaged.reduce((t, i) => t + i.qty, 0);
+    res.json({ message: `تم ترحيل الشحنة ${s.no}${dq ? ` — ${dq} وحدة إلى مخزن التوالف` : ''}`, shipment: s });
   } catch (e) { res.status(500).json({ message: e.message }); }
 });
 
