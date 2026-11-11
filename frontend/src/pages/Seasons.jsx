@@ -4,6 +4,7 @@ import api from '../utils/api';
 import { Card, Btn, Badge, PageHeader, C_THEME as C } from '../components/UI';
 import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
+import ProductPicker from '../components/ProductPicker';
 
 const err = (e) => e.response?.data?.message || e.message || 'خطأ';
 export const fmtDay = (d, opts = { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) => new Date(d + 'T00:00:00').toLocaleDateString('ar-EG', opts);
@@ -36,6 +37,7 @@ export function SeasonBanner() {
                 <div style={{ fontSize: 11, color: C.sub, marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                   {s.active ? `باقي ${daysAr(left)} على نهايته` : fmtDay(s.date, { weekday: 'long', day: 'numeric', month: 'long' })}
                   {!s.active && s.prepBy && s.prepBy <= today && ' · وقت تجهيز المخزون'}
+                  {s.lowCount > 0 && <span style={{ color: '#f87171', fontWeight: 700 }}> · {s.lowCount} أصناف رصيدها منخفض</span>}
                 </div>
               </div>
             </div>
@@ -51,12 +53,20 @@ export function SeasonBanner() {
 export default function Seasons() {
   const { can } = useAuth();
   const edit = can('settings');
+  const canItems = can('settings') || can('products');
   const [list, setList] = useState(null);
   const [form, setForm] = useState(null);
+  const [products, setProducts] = useState([]);
+  const [open, setOpen] = useState({});        // المواسم المفتوح فيها قسم الأصناف
+  const [idea, setIdea] = useState({});
   const today = new Date().toISOString().slice(0, 10);
 
   const load = () => api.get('/seasons').then(r => setList(r.data.seasons)).catch(e => toast.error(err(e)));
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); if (canItems) api.get('/products').then(r => setProducts(r.data.filter(p => p.active !== false))).catch(() => {}); }, []);
+  const addProduct = async (s, id) => { try { await api.post(`/seasons/${s.key}/products`, { product: id }); load(); } catch (e) { toast.error(err(e)); } };
+  const delProduct = async (s, id) => { await api.delete(`/seasons/${s.key}/products/${id}`); load(); };
+  const addIdea = async (s) => { const t = (idea[s.key] || '').trim(); if (!t) return; try { await api.post(`/seasons/${s.key}/ideas`, { text: t }); setIdea({ ...idea, [s.key]: '' }); load(); } catch (e) { toast.error(err(e)); } };
+  const delIdea = async (s, text) => { await api.delete(`/seasons/${s.key}/ideas`, { data: { text } }); load(); };
 
   const put = async (s, body) => { try { await api.put(`/seasons/${s.key}`, body); load(); } catch (e) { toast.error(err(e)); } };
   const changeDate = (s) => {
@@ -116,11 +126,18 @@ export default function Seasons() {
                   {s.prepBy && !s.active && <> · جهّز المخزون قبل {fmtDay(s.prepBy, { day: 'numeric', month: 'long' })}</>}
                 </div>
                 {s.tip && <div style={{ fontSize: 13, color: C.sub, marginTop: 8, lineHeight: 1.7 }}>💡 {s.tip}</div>}
-                {s.ideas.length > 0 && (
-                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 10 }}>
-                    {s.ideas.map(x => <span key={x} style={{ fontSize: 12, padding: '4px 10px', borderRadius: 14, background: s.color + '1a', border: `1px solid ${s.color}44`, color: C.text }}>{x}</span>)}
-                  </div>
-                )}
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 10, alignItems: 'center' }}>
+                  {s.ideas.map(x => <span key={x} style={{ fontSize: 12, padding: '4px 10px', borderRadius: 14, background: s.color + '1a', border: `1px solid ${s.color}44`, color: C.text }}>{x}</span>)}
+                  {s.myIdeas.map(x => (
+                    <span key={'m' + x} style={{ fontSize: 12, padding: '4px 6px 4px 10px', borderRadius: 14, background: '#10b9811a', border: '1px solid #10b98166', color: C.text, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                      ★ {x}{canItems && <button onClick={() => delIdea(s, x)} title="حذف" style={{ background: 'none', border: 'none', color: '#f87171', cursor: 'pointer', fontSize: 12, padding: 0 }}>✕</button>}
+                    </span>
+                  ))}
+                  {canItems && (
+                    <input value={idea[s.key] || ''} onChange={e => setIdea({ ...idea, [s.key]: e.target.value })} onKeyDown={e => e.key === 'Enter' && addIdea(s)}
+                      placeholder="+ فكرة خاصة بك (Enter)" style={{ fontSize: 12, padding: '5px 10px', borderRadius: 14, border: `1px dashed ${C.border}`, background: 'transparent', color: C.text, outline: 'none', width: 170 }} />
+                  )}
+                </div>
               </div>
               <div style={{ textAlign: 'center', minWidth: 110 }}>
                 {s.active
@@ -129,6 +146,28 @@ export default function Seasons() {
                 <div style={{ height: 5, background: C.border, borderRadius: 3, marginTop: 8, overflow: 'hidden' }}><div style={{ width: pct + '%', height: '100%', background: s.color }} /></div>
               </div>
             </div>
+            {/* أصناف الموسم من المخزون */}
+            <div style={{ marginTop: 12, borderTop: `1px solid ${C.border}`, paddingTop: 10 }}>
+              <button onClick={() => setOpen({ ...open, [s.key]: !open[s.key] })} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.text, fontWeight: 700, fontSize: 14, padding: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span>{open[s.key] ? '▾' : '◂'}</span> أصناف الموسم ({s.products.length})
+                {s.lowCount > 0 && <Badge color="#ef4444">{s.lowCount} رصيدها منخفض</Badge>}
+              </button>
+              {open[s.key] && (
+                <div style={{ marginTop: 10 }}>
+                  {canItems && <div style={{ marginBottom: 10 }}><ProductPicker products={products.filter(p => !s.products.some(x => x._id === p._id))} onSelect={(id) => addProduct(s, id)} width={360} placeholder="ابحث عن صنف لإضافته للموسم..." /></div>}
+                  {!s.products.length && <div style={{ fontSize: 13, color: C.muted }}>لم تُضف أصناف لهذا الموسم بعد — ابحث عن الصنف وأضفه لمتابعة رصيده قبل الموسم.</div>}
+                  {s.products.map(p => (
+                    <div key={p._id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 0', borderBottom: `1px solid ${C.border}44`, fontSize: 13 }}>
+                      <span style={{ flex: 1, fontWeight: 600 }}>{p.name}</span>
+                      <span style={{ color: C.muted, fontSize: 12 }}>سعر البيع {p.sellPrice || '—'}</span>
+                      <span style={{ minWidth: 90, textAlign: 'center' }}>{p.low ? <Badge color="#ef4444">الرصيد {p.stock}</Badge> : <Badge color="#10b981">الرصيد {p.stock}</Badge>}</span>
+                      {canItems && <button onClick={() => delProduct(s, p._id)} title="إزالة من الموسم" style={{ background: 'none', border: 'none', color: '#f87171', cursor: 'pointer', fontSize: 14 }}>✕</button>}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
             {edit && (
               <div style={{ display: 'flex', gap: 6, marginTop: 12, flexWrap: 'wrap' }}>
                 <Btn size="sm" variant="ghost" onClick={() => put(s, { enabled: !s.enabled })}>{s.enabled ? 'إيقاف التذكير' : 'تفعيل التذكير'}</Btn>

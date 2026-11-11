@@ -5,6 +5,7 @@
 const router = require('express').Router();
 const Setting = require('../models/Setting');
 const { auth, permit } = require('../middleware/auth');
+const { Product } = require('../models/index');
 
 const DAY = 864e5;
 const utc = (y, m, d) => new Date(Date.UTC(y, m - 1, d));
@@ -147,7 +148,7 @@ const SEASONS = [
 
 async function getConfig() {
   const s = await Setting.findOne({ key: 'seasons' }).lean();
-  return { disabled: [], overrides: {}, custom: [], ...(s?.value || {}) };
+  return { disabled: [], overrides: {}, custom: [], products: {}, ideas: {}, ...(s?.value || {}) };
 }
 
 // كل مواسم السنة دي والسنة الجاية — مع التعديلات والمواسم المضافة
@@ -156,6 +157,10 @@ async function buildSeasons() {
   const today = new Date(); today.setUTCHours(0, 0, 0, 0);
   const year = today.getUTCFullYear();
   const out = [];
+  // أصناف الموسم من المخزون — برصيدها الحالي
+  const ids = [...new Set(Object.values(cfg.products).flat().map(String))];
+  const prods = ids.length ? await Product.find({ _id: { $in: ids } }).select('name stock minStock sellPrice buyPrice barcode sku').lean() : [];
+  const prodMap = new Map(prods.map(p => [String(p._id), { _id: p._id, name: p.name, stock: p.stock, minStock: p.minStock, sellPrice: p.sellPrice, barcode: p.barcode, sku: p.sku, low: p.stock <= (p.minStock || 0) }]));
   const add = (s, date, extra = {}) => {
     const end = new Date(date.getTime() + Math.max(1, s.duration || 1) * DAY);
     if (end <= today) return;
@@ -165,7 +170,8 @@ async function buildSeasons() {
       key: s.key, id: `${s.key}_${date.getUTCFullYear()}`, name: s.name, icon: s.icon || '📅', color: s.color || '#6366f1',
       date: iso(date), daysLeft, lead, active: daysLeft <= 0, soon: daysLeft > 0 && daysLeft <= lead,
       prepBy: s.prep ? iso(new Date(date.getTime() - s.prep * DAY)) : null, prep: s.prep || null,
-      duration: s.duration || 1, tip: s.tip || '', ideas: s.ideas || [], hijri: !!s.hijri,
+      duration: s.duration || 1, tip: s.tip || '', ideas: s.ideas || [], myIdeas: cfg.ideas[s.key] || [], hijri: !!s.hijri,
+      products: (cfg.products[s.key] || []).map(id => prodMap.get(String(id))).filter(Boolean),
       enabled: !cfg.disabled.includes(s.key), ...extra,
     });
   };
@@ -184,7 +190,8 @@ async function buildSeasons() {
   }
   // أقرب ظهور لكل موسم بس
   const seen = new Set();
-  return out.sort((a, b) => a.date.localeCompare(b.date)).filter(s => !seen.has(s.key) && seen.add(s.key));
+  return out.sort((a, b) => a.date.localeCompare(b.date)).filter(s => !seen.has(s.key) && seen.add(s.key))
+    .map(s => ({ ...s, lowCount: s.products.filter(p => p.low).length }));
 }
 
 // ─── الواجهات ──────────────────────────────────────────────────
@@ -215,6 +222,38 @@ router.put('/:key', auth, permit('settings'), async (req, res) => {
   }
   await save(cfg);
   res.json({ message: 'تم الحفظ' });
+});
+
+// ربط أصناف من المخزون بالموسم
+router.post('/:key/products', auth, permit('settings', 'products'), async (req, res) => {
+  const cfg = await getConfig();
+  const { key } = req.params;
+  const ids = (Array.isArray(req.body.products) ? req.body.products : [req.body.product]).filter(Boolean).map(String);
+  if (!ids.length || !(await Product.countDocuments({ _id: { $in: ids } }))) return res.status(400).json({ message: 'الصنف غير موجود' });
+  cfg.products[key] = [...new Set([...(cfg.products[key] || []).map(String), ...ids])];
+  await save(cfg);
+  res.json({ message: 'تمت الإضافة للموسم' });
+});
+router.delete('/:key/products/:pid', auth, permit('settings', 'products'), async (req, res) => {
+  const cfg = await getConfig();
+  cfg.products[req.params.key] = (cfg.products[req.params.key] || []).map(String).filter(id => id !== req.params.pid);
+  await save(cfg);
+  res.json({ message: 'تمت الإزالة' });
+});
+// أفكار خاصة بيك تتضاف لأفكار الموسم
+router.post('/:key/ideas', auth, permit('settings', 'products'), async (req, res) => {
+  const text = String(req.body.text || '').trim().slice(0, 120);
+  if (!text) return res.status(400).json({ message: 'اكتب الفكرة' });
+  const cfg = await getConfig();
+  cfg.ideas[req.params.key] = [...new Set([...(cfg.ideas[req.params.key] || []), text])];
+  await save(cfg);
+  res.json({ message: 'تمت الإضافة' });
+});
+router.delete('/:key/ideas', auth, permit('settings', 'products'), async (req, res) => {
+  const cfg = await getConfig();
+  cfg.ideas[req.params.key] = (cfg.ideas[req.params.key] || []).filter(t => t !== req.body.text);
+  await save(cfg);
+  res.json({ message: 'تم الحذف' });
 });
 
 // موسم خاص (عروض متجر، يوم وطني، ...)
