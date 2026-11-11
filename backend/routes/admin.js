@@ -205,4 +205,72 @@ router.post('/products/import', auth, permit('products'), async (req, res) => {
   } catch (e) { res.status(500).json({ message: e.message }); }
 });
 
+// ─── النسخ الاحتياطي والاسترجاع (مدير النظام) ─────────────────────
+// ملف JSON واحد فيه كل الجداول — بصيغة EJSON عشان التواريخ والمعرّفات ترجع زي ما هي
+const mongoose = require('mongoose');
+const Setting = require('../models/Setting');
+const { EJSON } = mongoose.mongo.BSON;
+const BACKUP_APP = 'smart-for-trading';
+const PHOTOS = 'damagedphotos';
+const collections = () => {
+  const out = {};
+  for (const name of mongoose.modelNames()) { const c = mongoose.model(name).collection; out[c.collectionName] = c; }
+  return out;
+};
+
+router.get('/backup/info', auth, superAdmin, async (req, res) => {
+  const last = (await Setting.findOne({ key: 'last_backup' }).lean())?.value || null;
+  const counts = {};
+  for (const [name, c] of Object.entries(collections())) counts[name] = await c.countDocuments();
+  res.json({ last, counts });
+});
+
+router.get('/backup', auth, superAdmin, async (req, res) => {
+  try {
+    const withPhotos = req.query.photos === '1';
+    const data = {};
+    for (const [name, c] of Object.entries(collections())) {
+      if (name === PHOTOS && !withPhotos) continue;
+      data[name] = await c.find({}).toArray();
+    }
+    // مفتاح API المساعد سرّي — مايتحطش في الملف
+    if (data.settings) data.settings = data.settings.map(d => d.key === 'assistant' ? { ...d, value: { ...d.value, apiKey: '' } } : d);
+    const at = new Date();
+    const total = Object.values(data).reduce((t, l) => t + l.length, 0);
+    await Setting.findOneAndUpdate({ key: 'last_backup' }, { key: 'last_backup', value: { at, by: req.user.name, records: total, photos: withPhotos } }, { upsert: true });
+    const body = EJSON.stringify({ app: BACKUP_APP, version: 1, createdAt: at, createdBy: req.user.name, withPhotos, collections: data }, { relaxed: true });
+    res.set({ 'Content-Type': 'application/json; charset=utf-8', 'Content-Disposition': `attachment; filename="smart-backup-${at.toISOString().slice(0, 10)}.json"` });
+    res.send(body);
+  } catch (e) { res.status(500).json({ message: e.message }); }
+});
+
+// الاسترجاع: يستبدل البيانات الحالية بالموجودة في الملف (المستخدمين اختياري عشان ماتتقفلش برة)
+router.post('/restore', auth, superAdmin, async (req, res) => {
+  try {
+    if (req.body.confirm !== 'استرجاع') return res.status(400).json({ message: 'يُرجى كتابة كلمة «استرجاع» للتأكيد' });
+    let file;
+    try { file = EJSON.parse(typeof req.body.file === 'string' ? req.body.file : JSON.stringify(req.body.file), { relaxed: true }); }
+    catch { return res.status(400).json({ message: 'الملف تالف أو ليس نسخة احتياطية' }); }
+    if (file?.app !== BACKUP_APP || !file.collections) return res.status(400).json({ message: 'الملف ليس نسخة احتياطية من هذا النظام' });
+    const cols = collections();
+    const done = {};
+    // إعدادات بتخص النظام الحالي وتفضل زي ما هي بعد الاسترجاع
+    const KEEP = ['assistant', 'last_backup', 'assistant_usage'];
+    const kept = await Setting.find({ key: { $in: KEEP } }).lean();
+    if (file.collections.settings) file.collections.settings = file.collections.settings.filter(d => !KEEP.includes(d.key));
+    for (const [name, docs] of Object.entries(file.collections)) {
+      const c = cols[name];
+      if (!c || !Array.isArray(docs)) continue;
+      if (name === 'users' && !req.body.includeUsers) continue;
+      if (name === PHOTOS && !file.withPhotos) continue;     // نسخة من غير صور: الصور الحالية تفضل زي ما هي
+      await c.deleteMany({});
+      for (let i = 0; i < docs.length; i += 500) if (docs.slice(i, i + 500).length) await c.insertMany(docs.slice(i, i + 500), { ordered: false });
+      done[name] = docs.length;
+    }
+    for (const d of kept) await Setting.collection.replaceOne({ key: d.key }, d, { upsert: true });
+    const total = Object.values(done).reduce((a, b) => a + b, 0);
+    res.json({ message: `تم استرجاع ${total} سجل من نسخة ${new Date(file.createdAt).toLocaleDateString('ar-EG')}`, done });
+  } catch (e) { res.status(500).json({ message: e.message }); }
+});
+
 module.exports = router;

@@ -370,6 +370,7 @@ function DataTab() {
         </Card>
       )}
 
+      {isSuper && <BackupCard />}
       {isSuper && <ResetCard key={result?.message || ''} />}
     </div>
   );
@@ -458,5 +459,103 @@ function AssistantTab() {
         </Card>
       )}
     </div>
+  );
+}
+
+// ═══ النسخ الاحتياطي والاسترجاع ═════════════════════════════════
+function BackupCard() {
+  const [info, setInfo] = useState(null);
+  const [photos, setPhotos] = useState(false);
+  const [busy, setBusy] = useState('');
+  const [file, setFile] = useState(null);       // { name, text, meta }
+  const [word, setWord] = useState('');
+  const [withUsers, setWithUsers] = useState(false);
+  const load = () => api.get('/admin/backup/info').then(r => setInfo(r.data)).catch(() => {});
+  useEffect(() => { load(); }, []);
+
+  const download = async () => {
+    setBusy('backup');
+    try {
+      const r = await api.get('/admin/backup', { params: { photos: photos ? 1 : 0 }, responseType: 'blob' });
+      const url = URL.createObjectURL(r.data);
+      const a = document.createElement('a');
+      a.href = url; a.download = `smart-backup-${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+      toast.success('تم تنزيل النسخة الاحتياطية — احفظها في مكان آمن'); load();
+    } catch (e) { toast.error('تعذّر إنشاء النسخة'); }
+    setBusy('');
+  };
+
+  const pick = async (f) => {
+    if (!f) return;
+    const text = await f.text();
+    try {
+      const j = JSON.parse(text);
+      if (j.app !== 'smart-for-trading') throw new Error();
+      const counts = Object.fromEntries(Object.entries(j.collections).map(([k, v]) => [k, v.length]));
+      setFile({ name: f.name, text, meta: { createdAt: j.createdAt?.$date || j.createdAt, by: j.createdBy, withPhotos: j.withPhotos, counts } });
+      setWord('');
+    } catch { toast.error('الملف ليس نسخة احتياطية من هذا النظام'); }
+  };
+
+  const restore = async () => {
+    setBusy('restore');
+    try {
+      const { data } = await api.post('/admin/restore', { file: file.text, confirm: word, includeUsers: withUsers });
+      toast.success(data.message, { duration: 6000 }); setFile(null); load();
+    } catch (e) { toast.error(err(e)); }
+    setBusy('');
+  };
+
+  const last = info?.last;
+  const age = last ? Math.floor((Date.now() - new Date(last.at)) / 864e5) : null;
+  const total = info ? Object.entries(info.counts).filter(([k]) => photos || k !== 'damagedphotos').reduce((t, [, n]) => t + n, 0) : 0;
+  const LABELS = { products: 'الأصناف', stockmovements: 'حركات المخزون', shipments: 'الشحنات', amazonorders: 'طلبات أمازون', amazontransactions: 'معاملات أمازون', sales: 'فواتير البيع', purchases: 'فواتير الشراء', expenses: 'المصروفات', customers: 'العملاء', suppliers: 'الموردون', users: 'المستخدمون', damageds: 'التوالف', damagedphotos: 'صور التوالف', categories: 'الفئات', employees: 'الموظفون', amazonskumaps: 'ربط SKU', settings: 'الإعدادات', assistantactions: 'سجل المساعد' };
+
+  return (
+    <Card style={{ marginTop: 16, borderColor: '#10b98155' }}>
+      <div style={{ fontWeight: 700, marginBottom: 6 }}>💾 النسخ الاحتياطي</div>
+      <div style={{ fontSize: 13, color: C.sub, lineHeight: 1.9, marginBottom: 12 }}>
+        ينزّل ملفاً واحداً فيه كل بيانات النظام (الأصناف، الشحنات، الفواتير، الحركات، العملاء، الإعدادات...). يُنصح بتنزيل نسخة أسبوعياً وحفظها على جهازك أو Google Drive.
+        <div style={{ marginTop: 6 }}>
+          آخر نسخة: {last ? <b style={{ color: age > 7 ? '#f59e0b' : '#10b981' }}>{new Date(last.at).toLocaleDateString('ar-EG', { weekday: 'long', day: 'numeric', month: 'long' })} ({age === 0 ? 'اليوم' : `منذ ${age} يوم`}) — {last.by}</b> : <b style={{ color: '#f59e0b' }}>لم تُنزَّل أي نسخة بعد</b>}
+        </div>
+      </div>
+      <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+        <Btn variant="success" onClick={download} disabled={!!busy}>{busy === 'backup' ? 'جارٍ التجهيز...' : `تنزيل نسخة احتياطية (${total.toLocaleString('en')} سجل)`}</Btn>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: C.sub, cursor: 'pointer' }}>
+          <input type="checkbox" checked={photos} onChange={e => setPhotos(e.target.checked)} /> تضمين صور التوالف {info?.counts?.damagedphotos ? `(${info.counts.damagedphotos} صورة — حجم أكبر)` : ''}
+        </label>
+      </div>
+
+      <div style={{ borderTop: `1px solid ${C.border}`, marginTop: 16, paddingTop: 14 }}>
+        <div style={{ fontWeight: 700, marginBottom: 6, fontSize: 14 }}>استرجاع من نسخة</div>
+        <div style={{ fontSize: 12, color: C.muted, marginBottom: 10 }}>يستبدل البيانات الحالية بالكامل ببيانات الملف. يُستخدم عند فقدان البيانات أو للنقل إلى قاعدة بيانات جديدة.</div>
+        {!file ? (
+          <label style={{ display: 'inline-block', border: `1px dashed ${C.border}`, borderRadius: 8, padding: '9px 16px', cursor: 'pointer', fontSize: 13, color: C.sub }}>
+            اختيار ملف النسخة (.json)
+            <input type="file" accept=".json,application/json" style={{ display: 'none' }} onChange={e => { pick(e.target.files[0]); e.target.value = ''; }} />
+          </label>
+        ) : (
+          <div style={{ background: '#ef444411', border: '1px solid #ef444455', borderRadius: 10, padding: 12 }}>
+            <div style={{ fontSize: 13, marginBottom: 8 }}>
+              <b>{file.name}</b> — نسخة {file.meta.createdAt ? new Date(file.meta.createdAt).toLocaleString('ar-EG') : ''}{file.meta.by ? ` بواسطة ${file.meta.by}` : ''}
+            </div>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
+              {Object.entries(file.meta.counts).filter(([, n]) => n).map(([k, n]) => <Badge key={k} color="#64748b">{LABELS[k] || k}: {n}</Badge>)}
+            </div>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: C.sub, marginBottom: 10 }}>
+              <input type="checkbox" checked={withUsers} onChange={e => setWithUsers(e.target.checked)} /> استرجاع المستخدمين وكلمات المرور أيضاً (يُترك غير محدد عادةً)
+            </label>
+            <div style={{ fontSize: 13, color: '#f87171', marginBottom: 8, fontWeight: 700 }}>تحذير: ستُحذف البيانات الحالية وتُستبدل ببيانات الملف. اكتب «استرجاع» للتأكيد:</div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <input value={word} onChange={e => setWord(e.target.value)} placeholder="استرجاع" style={{ background: 'var(--bg)', border: `1px solid ${C.border}`, borderRadius: 8, padding: '9px 12px', color: C.text, fontSize: 14, outline: 'none', width: 140 }} />
+              <Btn variant="danger" onClick={restore} disabled={word !== 'استرجاع' || !!busy}>{busy === 'restore' ? 'جارٍ الاسترجاع...' : 'استرجاع البيانات'}</Btn>
+              <Btn variant="ghost" onClick={() => setFile(null)}>إلغاء</Btn>
+            </div>
+          </div>
+        )}
+      </div>
+    </Card>
   );
 }

@@ -6,7 +6,9 @@ const path = require('path');
 
 const app = express();
 app.use(cors({ origin: process.env.CLIENT_URL || '*', credentials: true }));
-app.use(express.json({ limit: '25mb' })); // تقارير أمازون ممكن تكون كبيرة
+// تقارير أمازون ممكن تكون كبيرة — وملف الاسترجاع أكبر
+const jsonSmall = express.json({ limit: '25mb' }), jsonBig = express.json({ limit: '150mb' });
+app.use((req, res, next) => (req.path === '/api/admin/restore' ? jsonBig : jsonSmall)(req, res, next));
 
 app.use('/api/auth',       require('./routes/auth'));
 app.use('/api/users',      require('./routes/users'));

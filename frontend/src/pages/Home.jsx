@@ -34,6 +34,7 @@ export default function Home() {
     st && { n: st.low.length, icon: '⚠️', color: '#f59e0b', title: 'أصناف تحت حد الطلب', hint: 'الرصيد أقل من الحد الأدنى', go: '/amazon?tab=reorder', list: st.low.map(p => `${p.name} — الرصيد ${p.stock}`) },
     a && { n: a.unmapped, icon: '🔗', color: '#8b5cf6', title: 'رموز SKU غير مرتبطة', hint: 'يلزم ربطها بالأصناف لاحتساب الربحية والمخزون', go: '/amazon?tab=skus', list: [] },
     a && { n: a.refunds.length, icon: '↩️', color: '#ec4899', title: 'مرتجعات آخر ٧ أيام', hint: 'يُرجى التحقق من استلامها وتسجيلها', go: '/amazon?tab=recon', list: a.refunds.map(r => `${(r.name || '').slice(0, 40)} ×${r.qty} · ${fmt(r.amount)}`) },
+    h.backup && { n: h.backup.days === null || h.backup.days >= 7 ? 1 : 0, icon: '💾', color: '#10b981', title: 'نسخة احتياطية', hint: h.backup.days === null ? 'لم تُنزَّل أي نسخة احتياطية بعد' : `آخر نسخة منذ ${h.backup.days} يوم — يُنصح بنسخة أسبوعياً`, go: '/settings?tab=data', list: [] },
   ].filter(Boolean) : [];
   const open = tasks.filter(t => t.n > 0);
 

@@ -51,6 +51,11 @@ router.get('/', auth, async (req, res) => {
         refunds: refunds.map(r => ({ date: r.date, orderId: r.orderId, name: r.description, qty: Math.abs(r.qty), amount: Math.round(r.total * 100) / 100 })),
       };
     }
+    if (req.user.role === 'superadmin') {
+      const Setting = require('../models/Setting');
+      const last = (await Setting.findOne({ key: 'last_backup' }).lean())?.value;
+      out.backup = { last: last?.at || null, days: last ? Math.floor((Date.now() - new Date(last.at)) / 864e5) : null };
+    }
     res.json(out);
   } catch (e) { res.status(500).json({ message: e.message }); }
 });
