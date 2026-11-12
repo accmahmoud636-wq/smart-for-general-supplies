@@ -96,7 +96,8 @@ function ShipmentList({ onNew, onOpen, initialFilter = '' }) {
 
 // ═══ شاشة المسح ═══════════════════════════════════════════════
 function ShipmentEditor({ id: initialId, onBack, onPosted }) {
-  const { user } = useAuth();
+  const { user, can } = useAuth();
+  const canPost = can('shipments_post');
   const [id, setId] = useState(initialId);
   const [no, setNo] = useState('');
   const [employee, setEmployee] = useState(null);
@@ -324,7 +325,7 @@ function ShipmentEditor({ id: initialId, onBack, onPosted }) {
 
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
         <Btn size="lg" variant="ghost" onClick={() => save()} disabled={busy}>حفظ {dirty && '•'}</Btn>
-        <Btn size="lg" variant="success" onClick={() => post()} disabled={busy || !items.length} style={{ flex: 1 }}>ترحيل الشحنة</Btn>
+        <Btn size="lg" variant="success" onClick={() => post()} disabled={busy || !items.length || !canPost} style={{ flex: 1 }} title={canPost ? '' : 'ليس لديك صلاحية الترحيل'}>{canPost ? 'ترحيل الشحنة' : '🔒 الترحيل غير مسموح لك'}</Btn>
         <Btn size="lg" variant="danger" onClick={remove} disabled={busy}>🗑️</Btn>
       </div>
     </div>

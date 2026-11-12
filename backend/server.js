@@ -66,6 +66,15 @@ mongoose.connect(process.env.MONGO_URI)
   .then(async () => {
     console.log('✅ MongoDB connected');
     await autoSeed();
+    // مرة واحدة: اللي كان معاه صلاحية الشحنات (مخصصة) ياخد صلاحية الترحيل عشان شغله مايقفش
+    try {
+      const Setting = require('./models/Setting');
+      if (!(await Setting.findOne({ key: 'perm_migr_post' }).lean())) {
+        const User = require('./models/User');
+        await User.updateMany({ useCustom: true, customPermissions: 'shipments' }, { $addToSet: { customPermissions: 'shipments_post' } });
+        await Setting.create({ key: 'perm_migr_post', value: true });
+      }
+    } catch (e) { console.error('perm migration:', e.message); }
     const PORT = process.env.PORT || 5000;
     app.listen(PORT, () => console.log('🚀 Server on port ' + PORT));
   })

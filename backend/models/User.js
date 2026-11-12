@@ -3,7 +3,9 @@ const bcrypt = require('bcryptjs');
 
 // كل الصلاحيات المتاحة — كل واحدة ليها مستويين: x:read = عرض بس، x = عرض وتعديل
 const PERMISSIONS = [
-  { key: 'shipments',  label: 'الشحنات والتسليم',      group: 'العمليات' },
+  { key: 'shipments',  label: 'الشحنات (التسجيل والحفظ)', group: 'العمليات' },
+  // صلاحية منفصلة (من غير «:» عشان صلاحية الشحنات ماتغطّيهاش): ترحيل الشحنة بيخصم من المخزون
+  { key: 'shipments_post', label: 'ترحيل الشحنات (خصم المخزون)', group: 'العمليات', toggle: true },
   { key: 'amazon',     label: 'مركز أمازون',           group: 'أمازون' },
   { key: 'products',   label: 'المنتجات وربط SKU',     group: 'المخزون' },
   { key: 'categories', label: 'الفئات',                group: 'المخزون' },
@@ -24,7 +26,7 @@ const ROLES = {
   },
   admin: {
     label: 'مدير',
-    permissions: ['products','categories','suppliers','customers','purchases','sales','expenses','stock','reports','amazon','shipments','settings']
+    permissions: ['products','categories','suppliers','customers','purchases','sales','expenses','stock','reports','amazon','shipments','shipments_post','settings']
   },
   accountant: {
     label: 'محاسب',
@@ -32,7 +34,7 @@ const ROLES = {
   },
   inventory: {
     label: 'مسؤول مخزون',
-    permissions: ['products','categories','suppliers','stock','purchases','reports:read','amazon','shipments']
+    permissions: ['products','categories','suppliers','stock','purchases','reports:read','amazon','shipments','shipments_post']
   },
   sales: {
     label: 'مبيعات',

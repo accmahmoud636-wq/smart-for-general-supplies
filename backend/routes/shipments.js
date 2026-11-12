@@ -136,7 +136,7 @@ router.delete('/:id', auth, CAN, async (req, res) => {
 });
 
 // ترحيل: المبيعات تتخصم من المخزون والمرتجع يرجع
-router.post('/:id/post', auth, CAN, async (req, res) => {
+router.post('/:id/post', auth, permit('shipments_post'), async (req, res) => {
   try {
     const s = await Shipment.findById(req.params.id).populate('customer', 'name platform');
     if (!s) return res.status(404).json({ message: 'الشحنة غير موجودة' });

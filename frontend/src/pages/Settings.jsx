@@ -145,7 +145,7 @@ function UsersPerms() {
                         <div key={p.key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '7px 12px', borderTop: `1px solid ${C.border}33`, flexWrap: 'wrap' }}>
                           <span style={{ fontSize: 13 }}>{p.label}</span>
                           <div style={{ display: 'flex', gap: 4 }}>
-                            {LEVELS.map(([k, l, color]) => (
+                            {(p.toggle ? [['none', 'ممنوع', '#64748b'], ['full', 'مسموح', '#10b981']] : LEVELS).map(([k, l, color]) => (
                               <button key={k} onClick={() => changeLevel(p.key, k)} style={{ padding: '5px 10px', borderRadius: 6, fontSize: 12, cursor: 'pointer', fontWeight: 700, background: lvl === k ? color + '33' : 'transparent', border: `1px solid ${lvl === k ? color : C.border}`, color: lvl === k ? color : C.muted }}>{l}</button>
                             ))}
                           </div>
