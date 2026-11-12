@@ -79,8 +79,28 @@ const TX_ALIASES = {
   fulfillmentFees:['fba fees', 'fulfillment fees', 'رسوم fba', 'رسوم الشحن عبر أمازون', 'رسوم التنفيذ'],
   otherFees:     ['other transaction fees', 'رسوم المعاملات الأخرى', 'رسوم معاملات أخرى'],
   other:         ['other', 'أخرى'],
-  total:         ['total', 'الإجمالي', 'المجموع']
+  total:         ['total', 'الإجمالي', 'المجموع'],
+  status:        ['transaction status', 'حالة المعاملة'],
+  releaseDate:   ['transaction release date', 'تاريخ تحرير المعاملة', 'تاريخ الإفراج']
 };
+
+// بصمة المعاملة: من بياناتها الثابتة بس — مش من الحالة (Deferred ← Released) ولا تاريخ التحرير
+// عشان لو نفس الفترة اترفعت تاني بعد ما الفلوس اتحررت، ماتتسجلش مرتين
+const txBase = (d) => [d.date ? new Date(d.date).toISOString() : '', d.type, d.orderId, d.sku, d.qty, d.productSales, d.shippingCredits, d.promoRebates, d.sellingFees, d.fulfillmentFees, d.otherFees, d.other, d.total].join('|');
+const txHash = (base, n) => crypto.createHash('sha1').update('v2|' + base + '#' + n).digest('hex');
+
+// ترحيل المعاملات القديمة للبصمة الجديدة (مرة واحدة)
+async function migrateTxHashes() {
+  const old = await AmazonTransaction.find({ hv: { $ne: 2 } }).sort('_id').lean();
+  if (!old.length) return;
+  const seen = {};
+  const ops = old.map(d => {
+    const base = txBase(d); seen[base] = (seen[base] || 0) + 1;
+    return { updateOne: { filter: { _id: d._id }, update: { $set: { hash: txHash(base, seen[base]), hv: 2 } } } };
+  });
+  // لو المعاملات الجديدة اتسجلت قبل كده بنفس البصمة، الأرقام الإضافية بتفضل منفصلة
+  for (let i = 0; i < ops.length; i += 500) await AmazonTransaction.bulkWrite(ops.slice(i, i + 500), { ordered: false }).catch(() => {});
+}
 
 function stageFromAmazon(status) {
   const s = normKey(status);
@@ -249,16 +269,14 @@ async function importTransactions(rows) {
     const { headerRow, idx } = found;
     const get = (r, f) => idx[f] !== undefined ? r[idx[f]] : '';
 
+    await migrateTxHashes();
     const seen = {};
     const ops = [];
     for (const r of rows.slice(headerRow + 1)) {
       if (!r || r.every(c => !String(c ?? '').trim())) continue;
       const type = String(get(r, 'type') || '').trim();
-      const raw = r.map(c => String(c ?? '').trim()).join('|');
-      seen[raw] = (seen[raw] || 0) + 1;                 // سطرين متطابقين في نفس الملف = سطرين حقيقيين
-      const hash = crypto.createHash('sha1').update(raw + '#' + seen[raw]).digest('hex');
       const doc = {
-        hash, type, kind: kindFromType(type),
+        hv: 2, type, kind: kindFromType(type),
         date: parseDate(get(r, 'date')),
         settlementId: String(get(r, 'settlementId') || '').trim(),
         orderId: String(get(r, 'orderId') || '').trim(),
@@ -274,7 +292,12 @@ async function importTransactions(rows) {
         other: num(get(r, 'other')),
         total: num(get(r, 'total'))
       };
-      ops.push({ updateOne: { filter: { hash }, update: { $setOnInsert: doc }, upsert: true } });
+      const base = txBase(doc);
+      seen[base] = (seen[base] || 0) + 1;               // سطرين متطابقين في نفس الملف = سطرين حقيقيين
+      const hash = txHash(base, seen[base]);
+      // الحالة وتاريخ التحرير بيتحدّثوا لو الملف أحدث
+      const live = { status: String(get(r, 'status') || '').trim(), releaseDate: parseDate(get(r, 'releaseDate')) || undefined };
+      ops.push({ updateOne: { filter: { hash }, update: { $setOnInsert: { hash, ...doc }, $set: live }, upsert: true } });
     }
     let inserted = 0;
     for (let i = 0; i < ops.length; i += 500) {

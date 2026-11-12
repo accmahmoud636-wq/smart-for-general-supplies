@@ -27,6 +27,9 @@ const AmazonOrder = mongoose.model('AmazonOrder', amazonOrderSchema);
 // ─── AMAZON TRANSACTION (من تقرير المعاملات / التسوية) ──────────
 const amazonTxSchema = new Schema({
   hash:          { type: String, required: true, unique: true }, // لمنع التكرار عند إعادة الرفع
+  hv:            { type: Number, default: 1 },     // إصدار طريقة البصمة (2 = من غير الحالة وتاريخ التحرير)
+  status:        { type: String, default: '' },    // Deferred / Released
+  releaseDate:   { type: Date },
   date:          { type: Date },
   settlementId:  { type: String, default: '' },
   type:          { type: String, default: '' },  // كما في التقرير

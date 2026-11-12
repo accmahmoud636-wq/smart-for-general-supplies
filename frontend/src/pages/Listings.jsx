@@ -4,6 +4,7 @@ import api from '../utils/api';
 import { Card, Badge, PageHeader, StatCard, Table, fmt, fmtDate, THEME, C_THEME as C } from '../components/UI';
 import { normAr } from '../components/ProductPicker';
 import toast from 'react-hot-toast';
+import { readReportFile } from '../utils/parseReport';
 
 const CUR = THEME.currency || 'ج.م';
 // الإجراءات اللي محتاجة تتعمل — بالترتيب حسب الأهمية
@@ -16,11 +17,30 @@ export default function Listings() {
   const [d, setD] = useState(null);
   const [filter, setFilter] = useState('focus');
   const [q, setQ] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [last, setLast] = useState(null);
 
-  useEffect(() => {
-    setD(null);
-    api.get('/amazon/listings', { params: { days } }).then(r => setD(r.data)).catch(e => toast.error(e.response?.data?.message || 'خطأ'));
-  }, [days]);
+  const load = () => api.get('/amazon/listings', { params: { days } }).then(r => setD(r.data)).catch(e => toast.error(e.response?.data?.message || 'خطأ'));
+  useEffect(() => { setD(null); load(); }, [days]);
+
+  // رفع تقرير «كل الطلبات» من أمازون (ولو اترفع ملف معاملات بالغلط بيتسجل برضه)
+  const upload = async (file) => {
+    if (!file) return;
+    setBusy(true);
+    try {
+      const rows = await readReportFile(file);
+      let r, kind = 'الطلبات';
+      try { r = (await api.post('/amazon/upload/orders', { rows })).data; }
+      catch (e) {
+        if (e.response?.status !== 400) throw e;
+        r = (await api.post('/amazon/upload/transactions', { rows })).data; kind = 'المعاملات';
+      }
+      setLast({ name: file.name, kind, message: r.message });
+      toast.success(`تقرير ${kind}: ${r.message}`, { duration: 6000 });
+      await load();
+    } catch (e) { toast.error(e.response?.data?.message || 'الملف غير مدعوم — يُقبل تقرير All Orders (TXT أو CSV أو Excel)'); }
+    setBusy(false);
+  };
 
   const rows = useMemo(() => {
     if (!d) return [];
@@ -63,14 +83,24 @@ export default function Listings() {
   return (
     <div>
       <PageHeader title="الإعلانات" icon="📣" actions={[
+        <label key="u" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', color: '#fff', borderRadius: 8, padding: '8px 14px', fontWeight: 700, cursor: busy ? 'wait' : 'pointer', fontSize: 13 }}>
+          {busy ? '⏳ جارٍ الرفع...' : '⬆ رفع تقرير الطلبات'}
+          <input type="file" accept=".txt,.csv,.tsv,.xlsx,.xls" style={{ display: 'none' }} disabled={busy} onChange={e => { upload(e.target.files[0]); e.target.value = ''; }} />
+        </label>,
         <div key="d" style={{ display: 'flex', gap: 4 }}>
           {[7, 30, 60, 90].map(n => <button key={n} onClick={() => setDays(n)} style={{ padding: '6px 12px', borderRadius: 8, cursor: 'pointer', fontSize: 13, fontWeight: 700, background: days === n ? '#6366f133' : 'transparent', border: `1px solid ${days === n ? '#6366f1' : C.border}`, color: days === n ? '#a5b4fc' : C.sub }}>{n} يوم</button>)}
         </div>
       ]} />
 
+      {last && (
+        <Card style={{ marginBottom: 14, borderColor: '#10b98166', fontSize: 13, color: C.sub }}>
+          ✅ آخر رفع: <b>{last.name}</b> (تقرير {last.kind}) — {last.message}. الطلبات المكررة بتتحدّث ومابتتكررش.
+        </Card>
+      )}
       {!K.hasOrders && (
         <Card style={{ marginBottom: 14, borderColor: '#f59e0b66', fontSize: 13, color: C.sub, lineHeight: 1.9 }}>
-          لا توجد طلبات أمازون في هذه الفترة. التحليل يعتمد على <b>تقرير الطلبات</b> (للمبيعات والاتجاه) و<b>تقرير المعاملات</b> (للربح والمرتجعات) — ارفعهما من شاشة المطابقة في الشحنات.
+          لا توجد طلبات أمازون في هذه الفترة. ارفع <b>تقرير كل الطلبات</b> من زر «رفع تقرير الطلبات» أعلاه
+          (Seller Central ← Reports ← Fulfillment ← All Orders، آخر 30 يوماً). الربح والمرتجعات تأتي من <b>تقرير المعاملات</b> المرفوع مع مطابقة الشحنات.
         </Card>
       )}
 
