@@ -162,9 +162,18 @@ prodRouter.get('/:id', auth, async (req, res) => {
   res.json(p);
 });
 
+// الفئة والمورد اختياريين: الخانة الفاضية تتحفظ «بدون» بدل ما تعمل خطأ
+const cleanRefs = (body, unset) => {
+  for (const k of ['category', 'supplier']) {
+    if (body[k] === '' || body[k] === null || (typeof body[k] === 'object' && body[k] && !body[k]._id)) { delete body[k]; if (unset) (unset.$unset ||= {})[k] = 1; }
+    else if (body[k] && typeof body[k] === 'object') body[k] = body[k]._id;
+  }
+  return body;
+};
+
 prodRouter.post('/', auth, permit('products'), async (req, res) => {
   try {
-    const body = { ...req.body, barcode: String(req.body.barcode || '').trim() };
+    const body = cleanRefs({ ...req.body, barcode: String(req.body.barcode || '').trim() });
     if (!body.barcode) body.barcode = (await nextBarcodes(1))[0];          // باركود تلقائي
     else if (await barcodeTaken(body.barcode)) return res.status(400).json({ message: 'الباركود مستخدم لصنف آخر' });
     res.status(201).json(await Product.create(body));
@@ -174,12 +183,14 @@ prodRouter.post('/', auth, permit('products'), async (req, res) => {
 
 prodRouter.put('/:id', auth, permit('products'), async (req, res) => {
   try {
-    const body = { ...req.body };
+    const unset = {};
+    const body = cleanRefs({ ...req.body }, unset);
+    delete body._id; delete body.createdAt; delete body.updatedAt; delete body.__v;
     if (body.barcode !== undefined) {
       body.barcode = String(body.barcode || '').trim();
       if (await barcodeTaken(body.barcode, req.params.id)) return res.status(400).json({ message: 'الباركود مستخدم لصنف آخر' });
     }
-    res.json(await Product.findByIdAndUpdate(req.params.id, body, { new: true }));
+    res.json(await Product.findByIdAndUpdate(req.params.id, { ...body, ...unset }, { new: true }));
   } catch(e){ res.status(400).json({ message: e.message }); }
 });
 
