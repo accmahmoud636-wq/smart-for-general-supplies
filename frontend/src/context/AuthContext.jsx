@@ -3,32 +3,44 @@ import api from '../utils/api';
 
 const AuthContext = createContext();
 
+// الجلسة بتتحفظ في sessionStorage: بتفضل مع تحديث الصفحة، وبتنتهي لما التاب أو المتصفح يتقفل
+// (نشيل أي جلسة قديمة كانت محفوظة دائماً في localStorage)
+try { localStorage.removeItem('erp_token'); localStorage.removeItem('erp_user'); } catch { /* */ }
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('erp_user')); } catch { return null; }
+    try { return JSON.parse(sessionStorage.getItem('erp_user')); } catch { return null; }
   });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const token = localStorage.getItem('erp_token');
+    const token = sessionStorage.getItem('erp_token');
     if (token) {
-      api.get('/auth/me').then(r => { setUser(r.data); localStorage.setItem('erp_user', JSON.stringify(r.data)); })
-        .catch(() => { localStorage.removeItem('erp_token'); localStorage.removeItem('erp_user'); setUser(null); })
+      api.get('/auth/me').then(r => { setUser(r.data); sessionStorage.setItem('erp_user', JSON.stringify(r.data)); })
+        .catch(() => { sessionStorage.removeItem('erp_token'); sessionStorage.removeItem('erp_user'); setUser(null); })
         .finally(() => setLoading(false));
     } else setLoading(false);
   }, []);
 
   const login = async (email, password) => {
     const { data } = await api.post('/auth/login', { email, password });
-    localStorage.setItem('erp_token', data.token);
-    localStorage.setItem('erp_user', JSON.stringify(data.user));
+    sessionStorage.setItem('erp_token', data.token);
+    sessionStorage.setItem('erp_user', JSON.stringify(data.user));
+    setUser(data.user);
+    return data.user;
+  };
+
+  const loginCard = async (code) => {
+    const { data } = await api.post('/auth/login-card', { code });
+    sessionStorage.setItem('erp_token', data.token);
+    sessionStorage.setItem('erp_user', JSON.stringify(data.user));
     setUser(data.user);
     return data.user;
   };
 
   const logout = () => {
-    localStorage.removeItem('erp_token');
-    localStorage.removeItem('erp_user');
+    sessionStorage.removeItem('erp_token');
+    sessionStorage.removeItem('erp_user');
     setUser(null);
   };
 
@@ -41,7 +53,7 @@ export function AuthProvider({ children }) {
     return perms.includes(perm.split(':')[0]);
   };
 
-  return <AuthContext.Provider value={{ user, login, logout, loading, can }}>{children}</AuthContext.Provider>;
+  return <AuthContext.Provider value={{ user, login, loginCard, logout, loading, can }}>{children}</AuthContext.Provider>;
 }
 
 export const useAuth = () => useContext(AuthContext);

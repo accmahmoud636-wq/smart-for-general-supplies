@@ -5,7 +5,8 @@ const { Schema } = mongoose;
 const employeeSchema = new Schema({
   name:   { type: String, required: true, trim: true },
   code:   { type: String, required: true, unique: true, uppercase: true, trim: true }, // EMP0001
-  active: { type: Boolean, default: true }
+  active: { type: Boolean, default: true },
+  user:   { type: Schema.Types.ObjectId, ref: 'User' }   // حساب الدخول المربوط بالكارت
 }, { timestamps: true });
 const Employee = mongoose.model('Employee', employeeSchema);
 

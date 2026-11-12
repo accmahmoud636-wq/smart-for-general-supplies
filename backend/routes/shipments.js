@@ -21,26 +21,41 @@ const reasonFor = (type, customer) => {
 const isAmazon = (s) => !s.customer || s.customer.platform === 'amazon';
 
 // ─── الموظفين ───────────────────────────────────────────────────
+const nextEmpCode = async () => {
+  const last = await Employee.find({ code: /^EMP\d+$/ }).select('code').lean();
+  return 'EMP' + String(last.reduce((m, e) => Math.max(m, parseInt(e.code.slice(3))), 0) + 1).padStart(4, '0');
+};
+// الموظف بتاع المستخدم الداخل — ولو مالوش كارت يتعمله واحد تلقائي
+async function employeeFor(user) {
+  const e = await Employee.findOne({ user: user._id });
+  if (e) return e;
+  return Employee.create({ name: user.name, code: await nextEmpCode(), user: user._id });
+}
+
 router.get('/employees', auth, async (req, res) => {
-  res.json(await Employee.find().sort('name').lean());
+  res.json(await Employee.find().populate('user', 'name email role active').sort('name').lean());
 });
 
 router.post('/employees', auth, permit('settings'), async (req, res) => {
   try {
     const name = String(req.body.name || '').trim();
     if (!name) return res.status(400).json({ message: 'اسم الموظف مطلوب' });
-    const last = await Employee.find({ code: /^EMP\d+$/ }).select('code').lean();
-    const n = last.reduce((m, e) => Math.max(m, parseInt(e.code.slice(3))), 0) + 1;
-    res.status(201).json(await Employee.create({ name, code: 'EMP' + String(n).padStart(4, '0') }));
+    const user = req.body.user || undefined;
+    if (user) await Employee.updateMany({ user }, { $unset: { user: 1 } });
+    res.status(201).json(await Employee.create({ name, code: await nextEmpCode(), user }));
   } catch (e) { res.status(400).json({ message: e.message }); }
 });
 
 router.put('/employees/:id', auth, permit('settings'), async (req, res) => {
-  const { name, active } = req.body;
+  const { name, active, user } = req.body;
   const upd = {};
   if (name !== undefined) upd.name = String(name).trim();
   if (active !== undefined) upd.active = !!active;
-  res.json(await Employee.findByIdAndUpdate(req.params.id, upd, { new: true }));
+  if (user !== undefined) {
+    if (user) { await Employee.updateMany({ user, _id: { $ne: req.params.id } }, { $unset: { user: 1 } }); upd.user = user; }  // كل حساب ليه كارت واحد
+    else upd.$unset = { user: 1 };
+  }
+  res.json(await Employee.findByIdAndUpdate(req.params.id, upd, { new: true }).populate('user', 'name email role active'));
 });
 
 // ─── الشحنات ────────────────────────────────────────────────────
@@ -91,7 +106,7 @@ router.post('/', auth, CAN, async (req, res) => {
     const last = await Shipment.findOne({ no: /^SH-/ }).sort('-no').select('no').lean();
     const no = 'SH-' + String(last ? parseInt(last.no.slice(3)) + 1 : 1).padStart(5, '0');
     const s = await Shipment.create({
-      no, employee: req.body.employee || undefined, customer: req.body.customer || undefined, notes: req.body.notes || '',
+      no, employee: req.body.employee || (await employeeFor(req.user))._id, customer: req.body.customer || undefined, notes: req.body.notes || '',
       items: await cleanItems(req.body.items), createdBy: req.user._id
     });
     res.status(201).json(s);
@@ -126,7 +141,7 @@ router.post('/:id/post', auth, CAN, async (req, res) => {
     const s = await Shipment.findById(req.params.id).populate('customer', 'name platform');
     if (!s) return res.status(404).json({ message: 'الشحنة غير موجودة' });
     if (s.status !== 'draft') return res.status(400).json({ message: 'تم ترحيل الشحنة مسبقاً' });
-    if (!s.employee) return res.status(400).json({ message: 'يلزم تسجيل الموظف أولاً' });
+    if (!s.employee) s.employee = (await employeeFor(req.user))._id;
     if (!s.customer) return res.status(400).json({ message: 'يُرجى اختيار العميل (أمازون / نون / جوميا ...)' });
     if (!s.items.length) return res.status(400).json({ message: 'الشحنة لا تحتوي على أصناف' });
 

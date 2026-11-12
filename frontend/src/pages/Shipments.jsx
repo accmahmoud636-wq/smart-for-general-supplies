@@ -96,6 +96,7 @@ function ShipmentList({ onNew, onOpen, initialFilter = '' }) {
 
 // ═══ شاشة المسح ═══════════════════════════════════════════════
 function ShipmentEditor({ id: initialId, onBack, onPosted }) {
+  const { user } = useAuth();
   const [id, setId] = useState(initialId);
   const [no, setNo] = useState('');
   const [employee, setEmployee] = useState(null);
@@ -103,7 +104,6 @@ function ShipmentEditor({ id: initialId, onBack, onPosted }) {
   const itemsRef = useRef([]);
   const setItems = (v) => { itemsRef.current = v; setItemsState(v); };
   const [mode, setMode] = useState('sale');
-  const [employees, setEmployees] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [customer, setCustomer] = useState(null);
   const [code, setCode] = useState('');
@@ -115,14 +115,13 @@ function ShipmentEditor({ id: initialId, onBack, onPosted }) {
   const ref = useRef();
 
   useEffect(() => {
-    api.get('/shipments/employees').then(r => setEmployees(r.data.filter(e => e.active))).catch(() => {});
     api.get('/customers').then(r => setCustomers(r.data.filter(c => c.active !== false))).catch(() => {});
     if (initialId) api.get(`/shipments/${initialId}`).then(({ data: s }) => {
       setNo(s.no); setEmployee(s.employee || null); setCustomer(s.customer?._id || null);
       setItems(s.items.map(i => ({ product: i.product?._id, name: i.product?.name || i.name, barcode: i.product?.barcode || i.barcode, stock: i.product?.stock, qty: i.qty, type: i.type, dest: i.dest || 'main', note: i.note || '', photos: i.photos || [] })));
     }).catch(e => toast.error(err(e)));
   }, [initialId]);
-  useEffect(() => { ref.current?.focus(); }, [employee, mode]);
+  useEffect(() => { ref.current?.focus(); }, [mode]);
   useEffect(() => {   // تحذير لو قفلت الصفحة من غير حفظ
     const h = (e) => { if (dirty) { e.preventDefault(); e.returnValue = ''; } };
     window.addEventListener('beforeunload', h);
@@ -146,14 +145,6 @@ function ShipmentEditor({ id: initialId, onBack, onPosted }) {
     const v = (fromCam ? raw : code).trim();
     if (!fromCam) setCode('');
     if (!v) return;
-    const emp = employees.find(e => e.code === v.toUpperCase());
-    if (emp) {
-      if (employee && employee._id !== emp._id && itemsRef.current.length) { say(false, `هذه الشحنة مسجّلة باسم ${employee.name} — يُرجى إنشاء شحنة جديدة لـ ${emp.name}`); return; }
-      setEmployee(emp); setDirty(true);
-      say(true, `الموظف: ${emp.name} — يمكنك بدء مسح الأصناف`);
-      return;
-    }
-    if (!employee) { say(false, 'يُرجى مسح بطاقة الموظف أولاً'); return; }
     try {
       const { data: p } = await api.get(`/products/barcode/${encodeURIComponent(v)}`);
       const q = addItem(p, mode);
@@ -190,10 +181,9 @@ function ShipmentEditor({ id: initialId, onBack, onPosted }) {
   const patchRow = (idx, patch) => { const l = [...items]; l[idx] = { ...l[idx], ...patch }; setItems(l); setDirty(true); };
 
   const save = async (quiet) => {
-    if (!employee) { say(false, 'يُرجى مسح بطاقة الموظف أولاً'); return null; }
     setBusy(true);
     try {
-      const body = { employee: employee._id, customer: customer || '', items: items.map(i => ({ product: i.product, qty: i.qty, type: i.type, dest: i.dest, note: i.note, photos: i.photos })) };
+      const body = { customer: customer || '', items: items.map(i => ({ product: i.product, qty: i.qty, type: i.type, dest: i.dest, note: i.note, photos: i.photos })) };
       const { data } = id ? await api.put(`/shipments/${id}`, body) : await api.post('/shipments', body);
       setId(data._id); setNo(data.no); setDirty(false);
       if (!quiet) toast.success(`تم حفظ الشحنة ${data.no}`);
@@ -236,14 +226,6 @@ function ShipmentEditor({ id: initialId, onBack, onPosted }) {
         <Btn key="b" variant="ghost" onClick={back}>رجوع</Btn>
       ]} />
 
-      {/* الموظف */}
-      <Card style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 12, borderColor: employee ? '#10b98155' : '#f59e0b88' }}>
-        <span style={{ fontSize: 28 }}>👤</span>
-        {employee
-          ? <div><div style={{ fontSize: 12, color: C.muted }}>الموظف</div><div style={{ fontWeight: 800, fontSize: 18 }}>{employee.name} <span style={{ fontSize: 12, color: C.muted, fontFamily: 'monospace' }}>{employee.code}</span></div></div>
-          : <div style={{ fontWeight: 700, color: '#fbbf24' }}>يُرجى مسح بطاقة الموظف للبدء</div>}
-      </Card>
-
       {/* العميل */}
       <Card style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', borderColor: customer ? '#10b98155' : '#f59e0b88' }}>
         <span style={{ fontSize: 26 }}>🏪</span>
@@ -253,6 +235,7 @@ function ShipmentEditor({ id: initialId, onBack, onPosted }) {
           <option value="">— اختر العميل —</option>
           {customers.map(c => <option key={c._id} value={c._id}>{c.name}</option>)}
         </select>
+        <div style={{ fontSize: 13, color: C.sub, whiteSpace: 'nowrap' }}>👤 الموظف: <b style={{ color: C.text }}>{employee?.name || user?.name}</b></div>
       </Card>
 
       {/* نوع المسح */}
@@ -271,11 +254,11 @@ function ShipmentEditor({ id: initialId, onBack, onPosted }) {
       <Card style={{ marginBottom: 12 }}>
         <div style={{ display: 'flex', gap: 8 }}>
           <input ref={ref} value={code} onChange={e => setCode(e.target.value)} onKeyDown={e => e.key === 'Enter' && onScan()} autoFocus
-            placeholder={employee ? `امسح باركود الصنف (${TYPES[mode].label})` : 'امسح بطاقة الموظف'}
-            style={{ flex: 1, background: 'var(--bg)', border: `2px solid ${employee ? TYPES[mode].color : '#f59e0b'}`, borderRadius: 10, padding: '14px 16px', color: 'var(--text)', fontSize: 20, outline: 'none', fontFamily: 'monospace', direction: 'ltr', textAlign: 'center' }} />
+            placeholder={`امسح باركود الصنف (${TYPES[mode].label})`}
+            style={{ flex: 1, background: 'var(--bg)', border: `2px solid ${TYPES[mode].color}`, borderRadius: 10, padding: '14px 16px', color: 'var(--text)', fontSize: 20, outline: 'none', fontFamily: 'monospace', direction: 'ltr', textAlign: 'center' }} />
           <button onClick={() => setCam(true)} title="مسح بالكاميرا" style={{ flexShrink: 0, width: 64, background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', border: 'none', borderRadius: 10, fontSize: 26, cursor: 'pointer' }}>📷</button>
         </div>
-        <CameraScanner open={cam} onClose={() => setCam(false)} onScan={onScan} message={flash} continuous title={employee ? `تسجيل ${TYPES[mode].label}` : 'مسح بطاقة الموظف'} />
+        <CameraScanner open={cam} onClose={() => setCam(false)} onScan={onScan} message={flash} continuous title={`تسجيل ${TYPES[mode].label}`} />
       </Card>
 
       {/* الأصناف: المبيعات ثم المرتجعات */}
@@ -340,8 +323,8 @@ function ShipmentEditor({ id: initialId, onBack, onPosted }) {
       )}
 
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-        <Btn size="lg" variant="ghost" onClick={() => save()} disabled={busy || !employee}>حفظ {dirty && '•'}</Btn>
-        <Btn size="lg" variant="success" onClick={() => post()} disabled={busy || !items.length || !employee} style={{ flex: 1 }}>ترحيل الشحنة</Btn>
+        <Btn size="lg" variant="ghost" onClick={() => save()} disabled={busy}>حفظ {dirty && '•'}</Btn>
+        <Btn size="lg" variant="success" onClick={() => post()} disabled={busy || !items.length} style={{ flex: 1 }}>ترحيل الشحنة</Btn>
         <Btn size="lg" variant="danger" onClick={remove} disabled={busy}>🗑️</Btn>
       </div>
     </div>
@@ -489,12 +472,18 @@ const Diff = ({ v }) => <span style={{ fontWeight: 800, color: v === 0 ? C.muted
 
 // ═══ الموظفين ══════════════════════════════════════════════════
 export function Employees() {
-  const { can } = useAuth();
+  const { can, user } = useAuth();
   const edit = can('settings');
+  const isSuper = user?.role === 'superadmin';
   const [list, setList] = useState([]);
+  const [users, setUsers] = useState([]);
   const [name, setName] = useState('');
   const load = () => api.get('/shipments/employees').then(r => setList(r.data)).catch(e => toast.error(err(e)));
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); if (isSuper) api.get('/users').then(r => setUsers(r.data)).catch(() => {}); }, []);
+  const link = async (e, userId) => {
+    try { await api.put(`/shipments/employees/${e._id}`, { user: userId || '' }); toast.success(userId ? 'تم ربط الكارت بالحساب' : 'تم فك الربط'); load(); }
+    catch (x) { toast.error(err(x)); }
+  };
 
   const add = async () => {
     if (!name.trim()) return;
@@ -515,12 +504,18 @@ export function Employees() {
             style={{ flex: 1, background: 'var(--bg)', border: `1px solid ${C.border}`, borderRadius: 8, padding: '10px 12px', color: C.text, fontSize: 14, outline: 'none' }} />
           <Btn onClick={add}>+ إضافة</Btn>
         </div>
-        <div style={{ fontSize: 12, color: C.muted, marginTop: 8 }}>يُخصَّص لكل موظف رمز باركود (EMP0001 …) يُطبع على بطاقة ويُمسح عند بدء كل شحنة.</div>
+        <div style={{ fontSize: 12, color: C.muted, marginTop: 8 }}>يُخصَّص لكل موظف كارت باركود (EMP0001 …) يُستخدم لتسجيل الدخول — اربط الكارت بحساب الدخول الخاص بالموظف. الشحنات تُسجَّل تلقائياً باسم الموظف الداخل.</div>
       </Card>}
       <Card style={{ padding: 0 }}>
         <Table columns={[
           { key: 'name', title: 'الاسم', render: (v, r) => <span style={{ fontWeight: 700, opacity: r.active ? 1 : 0.5 }}>{v}</span> },
           { key: 'code', title: 'الكود', render: v => <span style={{ fontFamily: 'monospace' }}>{v}</span> },
+          { key: 'user', title: 'حساب الدخول بالكارت', render: (u, r) => isSuper ? (
+            <select value={u?._id || ''} onChange={ev => link(r, ev.target.value)} style={{ background: 'var(--bg)', border: `1px solid ${u ? '#10b98166' : C.border}`, borderRadius: 8, padding: '6px 8px', color: C.text, fontSize: 12, maxWidth: 220 }}>
+              <option value="">— غير مربوط (لا يدخل بالكارت) —</option>
+              {users.map(x => <option key={x._id} value={x._id}>{x.name} — {x.email}</option>)}
+            </select>
+          ) : (u ? <span style={{ fontSize: 12 }}>{u.name}</span> : <span style={{ fontSize: 12, color: C.muted }}>غير مربوط</span>) },
           { key: 'active', title: 'الحالة', render: v => <Badge color={v ? '#10b981' : '#64748b'}>{v ? 'نشط' : 'موقوف'}</Badge> },
           { key: '_id', title: '', render: (_, r) => <div style={{ display: 'flex', gap: 6 }}>
             <Btn size="sm" variant="ghost" onClick={() => printCards([r])}>طباعة البطاقة</Btn>
