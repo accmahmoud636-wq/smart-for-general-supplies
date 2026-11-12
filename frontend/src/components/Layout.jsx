@@ -18,6 +18,7 @@ const SECTIONS = [
   ] },
   { title: 'مركز أمازون', items: [
     { path: '/amazon?tab=overview', icon: '🛒', label: 'نظرة عامة',       perm: 'amazon:read' },
+    { path: '/listings',    icon: '📣', label: 'الإعلانات',            perm: 'amazon:read' },
     { path: '/amazon?tab=profit',   icon: '💰', label: 'ربحية المنتجات',   perm: 'amazon:read' },
     { path: '/amazon?tab=recon',    icon: '🏦', label: 'التسويات والدفعات', perm: 'amazon:read' },
   ] },

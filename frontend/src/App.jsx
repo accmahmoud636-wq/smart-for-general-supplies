@@ -12,6 +12,7 @@ import AmazonHub from './pages/AmazonHub';
 import Shipments from './pages/Shipments';
 import Damaged from './pages/Damaged';
 import Seasons from './pages/Seasons';
+import Listings from './pages/Listings';
 
 function PrivateRoute({ children }) {
   const { user, loading } = useAuth();
@@ -29,6 +30,7 @@ function AppRoutes() {
       <Route path="/"           element={<PrivateRoute><Home /></PrivateRoute>} />
       <Route path="/shipments"  element={<PrivateRoute><Shipments /></PrivateRoute>} />
       <Route path="/scan"       element={<Navigate to="/shipments" />} />
+      <Route path="/listings"   element={<PrivateRoute><Listings /></PrivateRoute>} />
       <Route path="/seasons"    element={<PrivateRoute><Seasons /></PrivateRoute>} />
       <Route path="/damaged"    element={<PrivateRoute><Damaged /></PrivateRoute>} />
       <Route path="/amazon"     element={<PrivateRoute><AmazonHub /></PrivateRoute>} />
