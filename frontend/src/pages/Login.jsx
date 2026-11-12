@@ -18,6 +18,15 @@ export default function Login() {
   const { login, loginCard } = useAuth();
   const nav = useNavigate();
   const cardRef = useRef();
+  const timer = useRef();
+  // لو الاسكانر مابيبعتش Enter: أول ما يتكتب كود كارت كامل (EMP + أرقام) ندخل لوحدنا
+  const AR = { 'ث': 'E', 'ة': 'M', 'ح': 'P', 'ُ': 'E', '’': 'M', '؛': 'P' };
+  const looksLikeCard = (v) => /^EMP\d{4,}$/i.test([...String(v).trim()].map(c => AR[c] || c).join('').replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d)));
+  const onCardChange = (v) => {
+    setCode(v);
+    clearTimeout(timer.current);
+    if (looksLikeCard(v)) timer.current = setTimeout(() => submitCard(v), 250);
+  };
 
   useEffect(() => { try { localStorage.setItem(MODE_KEY, mode); } catch { /* */ } if (mode === 'card') setTimeout(() => cardRef.current?.focus(), 50); }, [mode]);
 
@@ -56,7 +65,7 @@ export default function Login() {
           {mode === 'card' ? (
             <div>
               <div style={{ textAlign: 'center', fontSize: 13, color: 'var(--sub)', marginBottom: 14 }}>اضغط في الخانة ثم امسح كارت الموظف بالاسكانر، أو استخدم كاميرا الموبايل</div>
-              <input ref={cardRef} value={code} onChange={e => setCode(e.target.value)} onKeyDown={e => e.key === 'Enter' && submitCard()} autoComplete="off"
+              <input ref={cardRef} value={code} onChange={e => onCardChange(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); clearTimeout(timer.current); submitCard(); } }} autoComplete="off"
                 placeholder="EMP0001" disabled={loading}
                 style={{ ...inp, fontSize: 22, textAlign: 'center', fontFamily: 'monospace', letterSpacing: 2, direction: 'ltr', border: '2px solid #6366f1', padding: '14px' }} />
               <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
