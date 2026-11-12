@@ -195,7 +195,7 @@ export default function Products() {
 
       <CameraScanner open={!!cam} onClose={() => setCam('')} title={cam === 'form' ? 'مسح باركود المصنّع' : 'البحث بالباركود'}
         onScan={code => { if (cam === 'form') setForm(f => ({ ...f, barcode: code })); else setSearch(code); }} />
-      <LabelModal open={!!labels} onClose={() => setLabels(null)} products={products} initial={labels || {}} />
+      <LabelModal open={!!labels} onClose={() => setLabels(null)} products={products} maps={maps} initial={labels || {}} />
 
       {/* Adjust Stock Modal */}
       <Modal open={!!adjustModal} onClose={() => setAdjustModal(null)} title={`تسوية مخزون: ${adjustModal?.name}`} width={400}>
