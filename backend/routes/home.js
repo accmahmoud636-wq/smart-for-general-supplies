@@ -60,4 +60,90 @@ router.get('/', auth, async (req, res) => {
   } catch (e) { res.status(500).json({ message: e.message }); }
 });
 
+// ═══════════════════════════════════════════════════════════════
+// تصنيف المخزون: كل قسم — حجمه في المخزون مقابل حجمه في المبيعات
+// ═══════════════════════════════════════════════════════════════
+router.get('/categories', auth, async (req, res) => {
+  try {
+    if (!req.user.hasPermission('products:read')) return res.status(403).json({ message: 'لا تملك الصلاحية' });
+    const { Category } = require('../models/index');
+    const days = Math.min(365, Math.max(7, +req.query.days || 30));
+    const since = new Date(Date.now() - days * 864e5);
+    const r2 = (n) => Math.round((n || 0) * 100) / 100;
+    const [cats, { resolve, products }, orders] = await Promise.all([
+      Category.find().lean(),
+      buildResolver(),
+      AmazonOrder.find({ purchaseDate: { $gte: since }, stage: { $ne: 'cancelled' } }).select('sku asin qty itemPrice').lean(),
+    ]);
+    const full = await Product.find({ active: { $ne: false } }).select('category stock minStock buyPrice').lean();
+    const catOf = new Map(full.map(p => [String(p._id), p.category ? String(p.category) : 'none']));
+
+    const sold = {};      // productId → { units, revenue }
+    for (const o of orders) {
+      const p = resolve(o.sku, o.asin); if (!p) continue;
+      const x = (sold[p._id] ||= { units: 0, revenue: 0 }); x.units += o.qty; x.revenue += o.itemPrice;
+    }
+    const G = {};
+    const g = (id) => (G[id] ||= { _id: id, products: 0, inStock: 0, out: 0, low: 0, units: 0, value: 0, noCost: 0, selling: 0, soldUnits: 0, revenue: 0, deadValue: 0, outSelling: 0 });
+    for (const p of full) {
+      const x = g(catOf.get(String(p._id)));
+      const s = sold[p._id];
+      x.products++;
+      if (p.stock > 0) { x.inStock++; x.units += p.stock; x.value += p.stock * (p.buyPrice || 0); } else x.out++;
+      if (p.stock > 0 && p.stock <= (p.minStock || 0)) x.low++;
+      if (!p.buyPrice) x.noCost++;
+      if (s) { x.selling++; x.soldUnits += s.units; x.revenue += s.revenue; if (p.stock <= 0) x.outSelling++; }
+      else if (p.stock > 0) x.deadValue += p.stock * (p.buyPrice || 0);
+    }
+    const T = Object.values(G).reduce((t, x) => ({ products: t.products + x.products, value: t.value + x.value, revenue: t.revenue + x.revenue, soldUnits: t.soldUnits + x.soldUnits, deadValue: t.deadValue + x.deadValue }), { products: 0, value: 0, revenue: 0, soldUnits: 0, deadValue: 0 });
+    const names = new Map(cats.map(c => [String(c._id), c]));
+
+    const rows = Object.values(G).map(x => {
+      const c = names.get(x._id);
+      const valueShare = T.value ? x.value / T.value * 100 : 0;
+      const salesShare = T.revenue ? x.revenue / T.revenue * 100 : 0;
+      const productShare = T.products ? x.products / T.products * 100 : 0;
+      const perDay = x.soldUnits / days;
+      const cover = perDay ? Math.round(x.units / perDay) : null;
+      // التشخيص: مقارنة نصيب القسم من المبيعات بنصيبه من رأس المال
+      let status = 'balanced', insight = '';
+      if (!T.revenue) { status = 'nodata'; insight = 'ارفع تقرير الطلبات لعرض أداء القسم'; }
+      else if (!T.value) { insight = x.revenue ? `${salesShare.toFixed(0)}% من المبيعات — أضف أسعار الشراء لمقارنة رأس المال` : `مفيش مبيعات في ${days} يوم`; status = x.revenue ? 'balanced' : 'frozen'; }
+      else if (!x.revenue && !x.units) { status = 'nodata'; insight = `مفيش رصيد ولا مبيعات في ${days} يوم — قرر: تشتري للقسم ولا تقفله`; }
+      else if (!x.revenue && x.value > 0) { status = 'frozen'; insight = `مفيش مبيعات في ${days} يوم — ${Math.round(x.value).toLocaleString('en')} رأس مال متجمد`; }
+      else if (salesShare >= Math.max(valueShare, 1) * 1.5) { status = 'engine'; insight = `بيجيب ${salesShare.toFixed(0)}% من المبيعات بـ ${valueShare.toFixed(0)}% بس من رأس المال — كبّر القسم وزوّد أصنافه`; }
+      else if (valueShare >= 5 && salesShare <= valueShare * 0.5) { status = 'heavy'; insight = `شايل ${valueShare.toFixed(0)}% من رأس المال ومبيعاته ${salesShare.toFixed(0)}% بس — خفّض الشراء وصفّي الراكد`; }
+      else insight = 'أداء متوازن مع حجمه في المخزون';
+      const alerts = [];
+      if (x.outSelling) alerts.push(`${x.outSelling} صنف بيبيع ورصيده خلص`);
+      if (x.low) alerts.push(`${x.low} تحت حد الطلب`);
+      if (x.noCost) alerts.push(`${x.noCost} بدون سعر شراء`);
+      return {
+        _id: x._id, name: c?.name || 'بدون فئة', color: c?.color || '#64748b',
+        products: x.products, inStock: x.inStock, out: x.out, low: x.low, units: x.units, value: r2(x.value),
+        selling: x.selling, soldUnits: x.soldUnits, revenue: r2(x.revenue), deadValue: r2(x.deadValue),
+        valueShare: r2(valueShare), salesShare: r2(salesShare), productShare: r2(productShare),
+        sellThrough: x.products ? Math.round(x.selling / x.products * 100) : 0, cover, status, insight, alerts,
+      };
+    }).sort((a, b) => b.products - a.products);
+
+    // عناوين سريعة للصفحة
+    const headlines = [];
+    if (T.revenue) {
+      const top = [...rows].sort((a, b) => b.revenue - a.revenue)[0];
+      if (top?.revenue && rows.length > 1) headlines.push({ icon: '🏆', text: `«${top.name}» أكبر قسم مبيعاً: ${top.salesShare.toFixed(0)}% من الإيراد` });
+      const engines = rows.length > 1 ? rows.filter(r => r.status === 'engine') : [];
+      if (engines.length) headlines.push({ icon: '⚡', text: `أقسام بتبيع أكتر من حجمها: ${engines.map(r => r.name).join('، ')} — فرصة للتوسع` });
+      const top3 = [...rows].sort((a, b) => b.revenue - a.revenue).slice(0, 3).reduce((t, r) => t + r.salesShare, 0);
+      if (rows.length > 3 && top3 >= 75) headlines.push({ icon: '⚖️', text: `${top3.toFixed(0)}% من مبيعاتك من 3 أقسام بس — نوّع عشان تقلل المخاطرة` });
+    }
+    const frozen = [...rows].sort((a, b) => b.deadValue - a.deadValue)[0];
+    if (frozen?.deadValue > 0) headlines.push({ icon: '🧊', text: `أكبر رأس مال راكد في «${frozen.name}»: ${Math.round(frozen.deadValue).toLocaleString('en')} في أصناف ماباعتش` });
+    const noCost = rows.reduce((t, r) => t + (r.alerts.find(a => a.includes('بدون سعر شراء')) ? parseInt(r.alerts.find(a => a.includes('بدون سعر شراء'))) : 0), 0);
+    if (noCost) headlines.push({ icon: '🏷️', text: `${noCost} صنف بدون سعر شراء — قيمة المخزون والربحية مش دقيقة لحد ما تكملهم` });
+
+    res.json({ days, rows, totals: { ...T, value: r2(T.value), revenue: r2(T.revenue), deadValue: r2(T.deadValue), categories: rows.length }, headlines });
+  } catch (e) { res.status(500).json({ message: e.message }); }
+});
+
 module.exports = router;

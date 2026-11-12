@@ -6,6 +6,7 @@ import { Card, Btn, fmt, fmtDate, C_THEME as C, THEME } from '../components/UI';
 
 const CUR = THEME.currency || 'ج.م';
 import { useAuth } from '../context/AuthContext';
+import CategoryBoard from '../components/CategoryBoard';
 
 // ═══════════════════════════════════════════════════════════
 // الرئيسية: شغل النهارده فوق — والأرقام تحت
@@ -114,6 +115,8 @@ export default function Home() {
           </Card>
         </div>
       </>}
+
+      {can('products:read') && <CategoryBoard />}
     </div>
   );
 }

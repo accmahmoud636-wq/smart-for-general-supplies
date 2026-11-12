@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import api from '../utils/api';
 import { Card, Btn, Badge, Input, Select, Modal, Table, PageHeader, fmt, C_THEME as C, THEME } from '../components/UI';
 import toast from 'react-hot-toast';
@@ -16,6 +17,9 @@ export default function Products() {
   const [modal, setModal] = useState(false);
   const [adjustModal, setAdjustModal] = useState(null);
   const [search, setSearch] = useState('');
+  const [params, setParams] = useSearchParams();
+  const catFilter = params.get('category') || '';
+  const setCat = (v) => { const p = new URLSearchParams(params); if (v) p.set('category', v); else p.delete('category'); setParams(p, { replace: true }); };
   const [form, setForm] = useState({ name:'', sku:'', asin:'', category:'', supplier:'', buyPrice:'', sellPrice:'', stock:'', minStock:'5', unit:'قطعة', description:'' });
   const [editing, setEditing] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -38,7 +42,7 @@ export default function Products() {
 
   useEffect(() => { load(); }, []);
 
-  const filtered = products.filter(p => !search || p.name?.toLowerCase().includes(search.toLowerCase()) || p.sku?.toLowerCase().includes(search.toLowerCase()) || p.asin?.toLowerCase().includes(search.toLowerCase()) || p.barcode?.includes(search) || maps.some(m => m.product === p._id && m.sku.toLowerCase().includes(search.toLowerCase())));
+  const filtered = products.filter(p => !catFilter || (catFilter === 'none' ? !p.category : (p.category?._id || p.category) === catFilter)).filter(p => !search || p.name?.toLowerCase().includes(search.toLowerCase()) || p.sku?.toLowerCase().includes(search.toLowerCase()) || p.asin?.toLowerCase().includes(search.toLowerCase()) || p.barcode?.includes(search) || maps.some(m => m.product === p._id && m.sku.toLowerCase().includes(search.toLowerCase())));
 
   const skusOf = (id) => maps.filter(m => m.product === id).map(m => m.sku);
   const nameOf = (id) => products.find(p => p._id === id)?.name || 'صنف آخر';
@@ -125,6 +129,11 @@ export default function Products() {
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="بحث بالاسم أو SKU أو ASIN أو الباركود"
             style={{ flex: 1, minWidth: 200, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 12px', color: 'var(--text)', fontSize: 14, outline: 'none' }} />
           <Btn variant="ghost" onClick={() => setCam('search')}>📷</Btn>
+          <select value={catFilter} onChange={e => setCat(e.target.value)} style={{ background: 'var(--bg)', border: `1px solid ${catFilter ? '#6366f1' : 'var(--border)'}`, borderRadius: 8, padding: '8px 10px', color: 'var(--text)', fontSize: 13, outline: 'none' }}>
+            <option value="">كل الفئات</option>
+            {categories.map(c => <option key={c._id} value={c._id}>{c.name}</option>)}
+            <option value="none">بدون فئة</option>
+          </select>
           <div style={{ fontSize: 13, color: 'var(--muted)' }}>{filtered.length} منتج</div>
           <div style={{ fontSize: 13, color: '#ef4444' }}>{filtered.filter(p => p.stock <= p.minStock).length} تحت حد الطلب</div>
         </div>
