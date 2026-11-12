@@ -23,7 +23,7 @@ const loginOk = async (res, user) => {
 router.post('/login-card', async (req, res) => {
   try {
     if (blocked(req)) return res.status(429).json(TOO_MANY);
-    const code = String(req.body.code || '').trim().toUpperCase();
+    const code = require('../utils/kbd').fixLayout(req.body.code).toUpperCase();   // لو الكيبورد عربي وقت المسح
     if (!code) return res.status(400).json({ message: 'امسح كارت الموظف' });
     const { Employee } = require('../models/shipment');
     const emp = await Employee.findOne({ code, active: true });

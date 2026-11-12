@@ -55,7 +55,7 @@ export default function Login() {
 
           {mode === 'card' ? (
             <div>
-              <div style={{ textAlign: 'center', fontSize: 13, color: 'var(--sub)', marginBottom: 14 }}>امسح كارت الموظف بالاسكانر أو بكاميرا الموبايل</div>
+              <div style={{ textAlign: 'center', fontSize: 13, color: 'var(--sub)', marginBottom: 14 }}>اضغط في الخانة ثم امسح كارت الموظف بالاسكانر، أو استخدم كاميرا الموبايل</div>
               <input ref={cardRef} value={code} onChange={e => setCode(e.target.value)} onKeyDown={e => e.key === 'Enter' && submitCard()} autoComplete="off"
                 placeholder="EMP0001" disabled={loading}
                 style={{ ...inp, fontSize: 22, textAlign: 'center', fontFamily: 'monospace', letterSpacing: 2, direction: 'ltr', border: '2px solid #6366f1', padding: '14px' }} />

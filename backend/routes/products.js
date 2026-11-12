@@ -111,7 +111,7 @@ async function barcodeTaken(code, exceptId) {
 
 // بحث بالباركود (أو SKU / ASIN) — للاسكانر
 prodRouter.get('/barcode/:code', auth, async (req, res) => {
-  const code = String(req.params.code).trim();
+  const code = require('../utils/kbd').fixLayout(req.params.code);   // لو الكيبورد عربي وقت المسح
   const esc = code.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const exact = new RegExp('^' + esc + '$', 'i');
   const p = await Product.findOne({ active: { $ne: false }, $or: [{ barcode: code }, { sku: exact }, { asin: exact }] }).lean();
