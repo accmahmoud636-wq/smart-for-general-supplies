@@ -68,11 +68,6 @@ function ShipmentList({ onNew, onOpen, initialFilter = '' }) {
       <PageHeader title="الشحنات والتسليم" icon="📦" actions={[
         <Btn key="new" onClick={onNew}>+ شحنة جديدة</Btn>
       ]} />
-      <Card style={{ marginBottom: 14, fontSize: 13, color: C.sub, lineHeight: 1.9 }}>
-        <b>دورة العمل:</b> ١. إنشاء شحنة وتسجيل الموظف ثم مسح الأصناف (مبيعات أو مرتجعات) وحفظها.
-        &nbsp;٢. ترحيل الشحنة: تُخصم المبيعات من المخزون، وتُضاف المرتجعات السليمة إليه، وتُحوَّل التالفة إلى مخزن التوالف.
-        &nbsp;٣. رفع تقرير أمازون لمطابقة الكميات صنفاً بصنف.
-      </Card>
       <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
         {[['', 'الكل'], ['draft', `مسودات${filter === '' && drafts ? ` (${drafts})` : ''}`], ['posted', 'مُرحّلة']].map(([k, l]) => (
           <button key={k} onClick={() => setFilter(k)} style={{ background: filter === k ? '#6366f133' : 'transparent', border: `1px solid ${filter === k ? '#6366f1' : C.border}`, color: filter === k ? '#a5b4fc' : C.sub, borderRadius: 20, padding: '5px 14px', fontSize: 12, cursor: 'pointer', fontWeight: 600 }}>{l}</button>
