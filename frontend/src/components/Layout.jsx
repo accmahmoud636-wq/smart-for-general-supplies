@@ -40,6 +40,8 @@ const SECTIONS = [
   { title: 'الإعدادات', items: [
     { path: '/settings?tab=employees', icon: '👤', label: 'الموظفون',          perm: 'settings:read' },
     { path: '/settings?tab=data',      icon: '🗂️', label: 'إدارة البيانات',      perm: 'products' },
+    { path: '/settings?tab=count',     icon: '🧮', label: 'جرد المخزون',        perm: 'stock:read' },
+    { path: '/settings?tab=opening',   icon: '📥', label: 'الرصيد الافتتاحي',    perm: 'stock' },
     { path: '/settings?tab=users',     icon: '🔐', label: 'المستخدمون والصلاحيات', perm: 'all' },
     { path: '/settings?tab=theme',     icon: '🎨', label: 'المظهر',    perm: 'settings:read' },
     { path: '/settings?tab=assistant', icon: '✨', label: 'المساعد الذكي', perm: 'all' },

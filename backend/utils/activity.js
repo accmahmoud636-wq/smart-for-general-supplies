@@ -40,6 +40,11 @@ const RULES = [
   ['PUT', /^\/api\/products\//, 'تعديل صنف'],
   ['DELETE', /^\/api\/products\//, 'حذف صنف'],
   ['POST', /^\/api\/admin\/products\/import/, 'استيراد أصناف'],
+  ['POST', /^\/api\/inventory\/opening/, 'رصيد افتتاحي'],
+  ['POST', /^\/api\/inventory\/[^/]+\/post/, 'ترحيل جرد'],
+  ['POST', /^\/api\/inventory$/, 'إنشاء جرد'],
+  ['PUT', /^\/api\/inventory\//, 'تعديل جرد'],
+  ['DELETE', /^\/api\/inventory\//, 'حذف مسودة جرد'],
   ['POST', /^\/api\/admin\/reset/, '⚠️ حذف بيانات'],
   ['POST', /^\/api\/admin\/restore/, '⚠️ استرجاع نسخة احتياطية'],
   ['GET', /^\/api\/admin\/backup$/, 'تنزيل نسخة احتياطية'],
@@ -72,7 +77,7 @@ function activityLogger(req, res, next) {
       const b = res.locals.body || {};
       const user = req.user || (b.user && { _id: b.user._id, name: b.user.name });
       if (!user) return;
-      const ref = b.invoiceNo || b.no || b.shipment?.no || b.reference || (rule && /صنف|عميل|مورد|مستخدم|موظف/.test(rule[2]) ? b.name : '') || '';
+      const ref = b.invoiceNo || b.no || b.shipment?.no || b.count?.no || b.reference || (rule && /صنف|عميل|مورد|مستخدم|موظف/.test(rule[2]) ? b.name : '') || '';
       Activity.create({
         user: user._id, name: user.name, action: rule ? rule[2] : `${req.method} ${path.replace('/api/', '')}`,
         ref: String(ref).slice(0, 80), method: req.method, path, ip: (req.headers['x-forwarded-for'] || req.ip || '').split(',')[0].trim(),

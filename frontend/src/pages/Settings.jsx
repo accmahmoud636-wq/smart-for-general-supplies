@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import api from '../utils/api';
 import { Card, Btn, Badge, Input, Modal, Table, PageHeader, fmtDate, C_THEME as C, ACCENTS, BASES, THEME, THEME_KEY, themeColors } from '../components/UI';
 import { Employees } from './Shipments';
+import { StockCount, OpeningBalance } from './Inventory';
 import { readReportFile } from '../utils/parseReport';
 import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
@@ -12,6 +13,8 @@ const TABS = [
   ['users', 'المستخدمون والصلاحيات', 'all'],
   ['theme', 'المظهر', 'settings:read'],
   ['data', 'إدارة البيانات', 'products'],
+  ['count', 'جرد المخزون', 'stock:read'],
+  ['opening', 'الرصيد الافتتاحي', 'stock'],
   ['assistant', 'المساعد الذكي', 'all'],
   ['activity', 'المتصلون والسجل', 'all'],
 ];
@@ -36,6 +39,8 @@ export default function Settings() {
       {tab === 'users' && <UsersPerms />}
       {tab === 'theme' && <Theme />}
       {tab === 'data' && <DataTab />}
+      {tab === 'count' && <StockCount />}
+      {tab === 'opening' && <OpeningBalance />}
       {tab === 'assistant' && <AssistantTab />}
       {tab === 'activity' && <ActivityTab />}
     </div>

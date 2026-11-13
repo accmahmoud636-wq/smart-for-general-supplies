@@ -12,7 +12,7 @@ const { mapHeaders, num } = require('./amazon')._test;
 // ─── التصفير (مدير النظام بس) ───────────────────────────────────
 const SCOPES = {
   products:  { label: 'الأصناف والمخزون',       models: [Product] },
-  movements: { label: 'حركات المخزون',           models: [StockMovement] },
+  movements: { label: 'حركات المخزون والجرد',    models: [StockMovement, require('../models/inventory').InventoryCount] },
   shipments: { label: 'الشحنات ومخزن التوالف',   models: [Shipment, Damaged, DamagedPhoto] },
   amazon:    { label: 'بيانات أمازون وربط SKU',   models: [AmazonOrder, AmazonTransaction, AmazonSkuMap] },
   sales:     { label: 'فواتير البيع',              models: [Sale] },
