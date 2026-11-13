@@ -213,7 +213,7 @@ export default function Listings() {
         <input value={q} onChange={e => setQ(e.target.value)} placeholder="بحث بالاسم أو SKU..." style={{ marginRight: 'auto', minWidth: 220, background: 'var(--bg)', border: `1px solid ${C.border}`, borderRadius: 8, padding: '8px 12px', color: C.text, fontSize: 13, outline: 'none' }} />
       </div>
       <Card style={{ padding: 0 }}>
-        <Table columns={cols} data={rows.slice(0, 500)} />
+        <Table columns={cols} data={rows.slice(0, 500)} maxHeight="calc(100vh - 150px)" />
         {rows.length > 500 && <div style={{ padding: 10, fontSize: 12, color: C.muted, textAlign: 'center' }}>يُعرض أول 500 — استخدم البحث أو الفلاتر</div>}
       </Card>
     </div>

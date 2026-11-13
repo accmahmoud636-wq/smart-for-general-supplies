@@ -104,14 +104,15 @@ export function Modal({ open, onClose, title, children, width = 520 }) {
   );
 }
 
-export function Table({ columns, data, onRow }) {
+export function Table({ columns, data, onRow, maxHeight }) {
+  // maxHeight: الجدول بيبقى صندوق له سكرول خاص بيه والعناوين ثابتة فوق
   return (
-    <div style={{ overflowX: 'auto' }}>
+    <div style={{ overflowX: 'auto', ...(maxHeight ? { maxHeight, overflowY: 'auto' } : {}) }}>
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
         <thead>
           <tr style={{ background: 'var(--bg)' }}>
             {columns.map(col => (
-              <th key={col.key} style={{ padding: '10px 14px', textAlign: 'right', color: C.sub, fontWeight: 600, fontSize: 12, borderBottom: `1px solid ${C.border}`, whiteSpace: 'nowrap' }}>{col.title}</th>
+              <th key={col.key} style={{ ...(maxHeight ? { position: 'sticky', top: 0, zIndex: 2, background: 'var(--bg)' } : {}), padding: '10px 14px', textAlign: 'right', color: C.sub, fontWeight: 600, fontSize: 12, borderBottom: `1px solid ${C.border}`, whiteSpace: 'nowrap' }}>{col.title}</th>
             ))}
           </tr>
         </thead>
