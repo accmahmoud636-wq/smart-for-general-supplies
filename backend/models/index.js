@@ -49,7 +49,10 @@ const productSchema = new Schema({
   unit:       { type: String, default: 'قطعة' },
   barcode:    { type: String, default: '' },
   description:{ type: String, default: '' },
-  active:     { type: Boolean, default: true }
+  active:     { type: Boolean, default: true },
+  // صنف مركب (طقم): مالوش رصيد خاص — لما يخرج بتخرج مكوناته (لحد 6 قطع)
+  isKit:      { type: Boolean, default: false },
+  components: [{ _id: false, product: { type: Schema.Types.ObjectId, ref: 'Product', required: true }, qty: { type: Number, default: 1, min: 1 } }]
 }, { timestamps: true });
 productSchema.virtual('stockValue').get(function() {
   return this.stock * this.buyPrice;

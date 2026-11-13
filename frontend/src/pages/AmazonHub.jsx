@@ -6,6 +6,7 @@ import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import ProductPicker from '../components/ProductPicker';
+import KitModal from '../components/KitModal';
 
 const CUR = THEME.currency || 'ج.م';
 const money = (v) => <span style={{ color: v < 0 ? '#f87171' : C.text, fontWeight: 600 }}>{fmt(v)}</span>;
@@ -335,8 +336,14 @@ function ReorderTab() {
 function SkusTab({ canEdit }) {
   const [list, setList] = useState([]);
   const [products, setProducts] = useState([]);
-  const load = () => api.get('/amazon/skus').then(r => setList(r.data)).catch(() => toast.error('تعذّر تحميل البيانات'));
+  const [maps, setMaps] = useState([]);
+  const [kit, setKit] = useState(null);       // sku المفتوح لتعديل محتواه
+  const load = () => {
+    api.get('/amazon/skus').then(r => setList(r.data)).catch(() => toast.error('تعذّر تحميل البيانات'));
+    api.get('/amazon/skus/maps').then(r => setMaps(r.data)).catch(() => {});
+  };
   useEffect(() => { load(); api.get('/products').then(r => setProducts(r.data.filter(p => p.active !== false))).catch(() => {}); }, []);
+  const mapOf = (sku) => maps.find(m => m.sku.toLowerCase() === sku.toLowerCase());
 
   const map = async (sku, product) => {
     if (!product) return;
@@ -352,7 +359,13 @@ function SkusTab({ canEdit }) {
     { key: 'name', title: 'الاسم لدى أمازون', render: v => <span style={{ fontSize: 12, color: C.sub, display: 'inline-block', maxWidth: 280, overflow: 'hidden', textOverflow: 'ellipsis' }}>{v || '—'}</span> },
     { key: 'units', title: 'الوحدات' },
     { key: 'product', title: 'المنتج في النظام', render: (v, r) => v
-      ? <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}><Badge color="#10b981">{v.name}</Badge>{r.manual && canEdit && <Btn size="sm" variant="ghost" onClick={() => unmap(r.sku)}>إلغاء الربط</Btn>}</div>
+      ? <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+          {(r.parts || []).length > 1 || r.packQty > 1
+            ? <Badge color="#8b5cf6">📦 {r.parts.map(x => `${x.qty > 1 ? x.qty + '× ' : ''}${x.name}`).join(' + ')}</Badge>
+            : <Badge color="#10b981">{v.name}</Badge>}
+          {canEdit && <Btn size="sm" variant="ghost" onClick={() => setKit(r.sku)} title="الإعلان فيه أكتر من قطعة أو أكتر من صنف">محتوى الإعلان</Btn>}
+          {r.manual && canEdit && <Btn size="sm" variant="ghost" onClick={() => unmap(r.sku)}>إلغاء الربط</Btn>}
+        </div>
       : canEdit
         ? <ProductPicker products={products} onSelect={(id) => map(r.sku, id)} borderColor="#f8717155" />
         : <Badge color="#ef4444">غير مربوط</Badge> },
@@ -365,6 +378,8 @@ function SkusTab({ canEdit }) {
         {unmapped > 0 && <b style={{ color: '#f87171' }}> — {unmapped} غير مربوط</b>}
       </Card>
       <Card style={{ padding: 0 }}><Table columns={cols} data={list.map(s => ({ ...s, _id: s.sku }))} /></Card>
+      <KitModal open={!!kit} onClose={() => setKit(null)} sku={kit} products={products} onSaved={load}
+        map={kit && (mapOf(kit) || (() => { const r = list.find(x => x.sku === kit); return r?.product ? { product: r.product._id, qty: 1, components: [] } : null; })())} />
     </div>
   );
 }

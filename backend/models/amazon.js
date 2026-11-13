@@ -52,7 +52,10 @@ const AmazonTransaction = mongoose.model('AmazonTransaction', amazonTxSchema);
 // ─── ربط SKU أمازون بمنتج في النظام ───────────────────────────
 const skuMapSchema = new Schema({
   sku:     { type: String, required: true, unique: true },
-  product: { type: Schema.Types.ObjectId, ref: 'Product', required: true }
+  product: { type: Schema.Types.ObjectId, ref: 'Product', required: true },
+  qty:     { type: Number, default: 1, min: 1 },  // الإعلان باكدج: بيع إعلان واحد = كام قطعة من الصنف (مثلاً «2 حجر» = 2)
+  // إعلان فيه أصناف مختلفة مع بعض (طقم): باقي المكونات غير الصنف الأساسي
+  components: [{ _id: false, product: { type: Schema.Types.ObjectId, ref: 'Product', required: true }, qty: { type: Number, default: 1, min: 1 } }]
 }, { timestamps: true });
 const AmazonSkuMap = mongoose.model('AmazonSkuMap', skuMapSchema);
 

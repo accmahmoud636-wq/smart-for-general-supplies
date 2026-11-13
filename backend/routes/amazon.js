@@ -125,18 +125,36 @@ function kindFromType(type) {
 async function buildResolver() {
   const [maps, products] = await Promise.all([
     AmazonSkuMap.find().lean(),
-    Product.find().select('name sku asin barcode buyPrice sellPrice stock minStock active').lean()
+    Product.find().select('name sku asin barcode buyPrice sellPrice stock minStock active isKit components').lean()
   ]);
   const byId = new Map(products.map(p => [String(p._id), p]));
   const bySku = new Map(products.filter(p => p.sku).map(p => [p.sku.trim().toLowerCase(), p]));
   const byAsin = new Map(products.filter(p => p.asin).map(p => [p.asin.trim().toUpperCase(), p]));
   const byMap = new Map(maps.map(m => [m.sku.trim().toLowerCase(), byId.get(String(m.product))]));
+  const byMult = new Map(maps.map(m => [m.sku.trim().toLowerCase(), Math.max(1, m.qty || 1)]));
+  // مكونات كل إعلان: [{ p, qty }] — الإعلان العادي = الصنف × 1
+  const byParts = new Map(maps.map(m => [m.sku.trim().toLowerCase(),
+    [{ p: byId.get(String(m.product)), qty: Math.max(1, m.qty || 1) }, ...(m.components || []).map(c => ({ p: byId.get(String(c.product)), qty: Math.max(1, c.qty || 1) }))].filter(x => x.p)]));
   const byBarcode = new Map(products.filter(p => p.barcode).map(p => [p.barcode.trim().toLowerCase(), p]));
   const resolve = (sku, asin) => {
     const k = String(sku || '').trim().toLowerCase();
     return byMap.get(k) || bySku.get(k) || byBarcode.get(k) || (asin ? byAsin.get(String(asin).trim().toUpperCase()) : null) || null;
   };
-  return { resolve, products };
+  // كام قطعة من الصنف في الإعلان الواحد (الإعلانات الباكدج) — الافتراضي 1
+  const mult = (sku) => byMult.get(String(sku || '').trim().toLowerCase()) || 1;
+  // الصنف المركب بيتفك لمكوناته (كل مكوّن × كميته)
+  const expand = (list) => list.flatMap(x => x.p.isKit && x.p.components?.length
+    ? x.p.components.map(c => ({ p: byId.get(String(c.product)), qty: x.qty * (c.qty || 1) })).filter(y => y.p)
+    : [x]);
+  const parts = (sku, asin) => {
+    const m = byParts.get(String(sku || '').trim().toLowerCase());
+    if (m?.length) return expand(m);
+    const p = resolve(sku, asin);
+    return p ? expand([{ p, qty: 1 }]) : [];
+  };
+  // تكلفة الإعلان الواحد = مجموع (تكلفة كل مكوّن × كميته)
+  const kitCost = (sku, asin) => parts(sku, asin).reduce((t, x) => t + (x.p.buyPrice || 0) * x.qty, 0);
+  return { resolve, mult, parts, kitCost, products };
 }
 
 function dateRange(q, field) {
@@ -205,7 +223,7 @@ async function importOrders(rows) {
     if (!found) return null;
     const { headerRow, idx } = found;
     const get = (r, f) => idx[f] !== undefined ? r[idx[f]] : '';
-    const { resolve } = await buildResolver();
+    const { resolve, mult, parts, kitCost } = await buildResolver();
 
     // طلبات اتسجلت يدوي من الاسكانر: نشيل السطور اليدوية ونربط سطور التقرير بنفس الفاتورة
     const fileIds = [...new Set(rows.slice(headerRow + 1).map(r => String(get(r, 'orderId') || '').trim()).filter(Boolean))];
@@ -363,7 +381,7 @@ router.put('/orders/stage', auth, permit('amazon'), async (req, res) => {
 // ترحيل الطلبات المشحونة لفواتير بيع (يخصم المخزون)
 router.post('/orders/post-sales', auth, permit('amazon'), async (req, res) => {
   try {
-    const { resolve } = await buildResolver();
+    const { resolve, mult, parts, kitCost } = await buildResolver();
     const lines = await AmazonOrder.find({ stage: { $in: ['shipped', 'delivered'] }, sale: null }).sort('purchaseDate');
     const groups = {};
     for (const l of lines) (groups[l.orderId] ||= []).push(l);
@@ -383,7 +401,7 @@ router.post('/orders/post-sales', auth, permit('amazon'), async (req, res) => {
 // ═══════════════════════════════════════════════════════════════
 router.get('/skus', auth, permit('amazon', 'amazon:read'), async (req, res) => {
   try {
-    const { resolve } = await buildResolver();
+    const { resolve, mult, parts, kitCost } = await buildResolver();
     const [orders, txs, maps] = await Promise.all([
       AmazonOrder.find().select('sku asin productName qty').lean(),
       AmazonTransaction.find({ sku: { $ne: '' } }).select('sku description').lean(),
@@ -399,7 +417,8 @@ router.get('/skus', auth, permit('amazon', 'amazon:read'), async (req, res) => {
     for (const t of txs) if (!all.has(t.sku)) all.set(t.sku, { sku: t.sku, asin: '', name: t.description, units: 0 });
     const list = [...all.values()].map(s => {
       const p = resolve(s.sku, s.asin);
-      return { ...s, product: p ? { _id: p._id, name: p.name } : null, manual: mapped.has(s.sku.toLowerCase()) };
+      const kit = parts(s.sku, s.asin);
+      return { ...s, product: p ? { _id: p._id, name: p.name } : null, packQty: mult(s.sku), parts: kit.map(x => ({ _id: x.p._id, name: x.p.name, qty: x.qty })), manual: mapped.has(s.sku.toLowerCase()) };
     }).sort((a, b) => (a.product ? 1 : 0) - (b.product ? 1 : 0) || b.units - a.units);
     res.json(list);
   } catch (e) { res.status(500).json({ message: e.message }); }
@@ -408,18 +427,22 @@ router.get('/skus', auth, permit('amazon', 'amazon:read'), async (req, res) => {
 // كل الربط (عشان كارت الصنف وقائمة المنتجات)
 router.get('/skus/maps', auth, async (req, res) => {
   const maps = await AmazonSkuMap.find().sort('sku').lean();
-  res.json(maps.map(m => ({ sku: m.sku, product: String(m.product) })));
+  res.json(maps.map(m => ({ sku: m.sku, product: String(m.product), qty: m.qty || 1, components: (m.components || []).map(c => ({ product: String(c.product), qty: c.qty || 1 })) })));
 });
 
 router.post('/skus/map', auth, permit('amazon', 'products'), async (req, res) => {
   try {
     const sku = String(req.body.sku || '').trim();
     const { product, force } = req.body;
+    const qty = Math.max(1, Math.round(+req.body.qty || 1));
+    // مكونات إضافية (طقم من أصناف مختلفة): [{ product, qty }]
+    const components = (Array.isArray(req.body.components) ? req.body.components : [])
+      .filter(c => c?.product && String(c.product) !== String(product)).map(c => ({ product: c.product, qty: Math.max(1, Math.round(+c.qty || 1)) }));
     if (!sku || !product) return res.status(400).json({ message: 'رمز SKU والصنف مطلوبان' });
     const existing = await AmazonSkuMap.findOne({ sku }).populate('product', 'name').lean();
     if (existing && String(existing.product?._id) !== String(product) && !force)
       return res.status(409).json({ message: `رمز SKU مرتبط بصنف آخر: ${existing.product?.name || '؟'}`, otherProduct: existing.product?.name });
-    await AmazonSkuMap.findOneAndUpdate({ sku }, { sku, product }, { upsert: true });
+    await AmazonSkuMap.findOneAndUpdate({ sku }, { sku, product, qty, components }, { upsert: true });
     await AmazonOrder.updateMany({ sku }, { product });
     res.json({ message: 'تم الربط' });
   } catch (e) { res.status(400).json({ message: e.message }); }
@@ -436,7 +459,7 @@ router.delete('/skus/map/:sku', auth, permit('amazon', 'products'), async (req, 
 // ═══════════════════════════════════════════════════════════════
 router.get('/profitability', auth, permit('amazon', 'amazon:read', 'reports'), async (req, res) => {
   try {
-    const { resolve } = await buildResolver();
+    const { resolve, mult, parts, kitCost } = await buildResolver();
     const txs = await AmazonTransaction.find(dateRange(req.query, 'date')).lean();
     const bySku = {};
     let generalFees = 0, transfers = 0;
@@ -453,12 +476,13 @@ router.get('/profitability', auth, permit('amazon', 'amazon:read', 'reports'), a
     const rows = Object.values(bySku).map(g => {
       const p = resolve(g.sku);
       const netUnits = g.unitsSold - g.unitsRefunded;
-      const unitCost = p?.buyPrice || 0;
+      const packQty = mult(g.sku);
+      const unitCost = kitCost(g.sku);                    // تكلفة الإعلان الواحد = مجموع تكلفة مكوناته
       const cogs = netUnits * unitCost;
       const profit = g.net - cogs;
       const revenue = g.sales + g.refunds;
       return {
-        ...g, product: p ? { _id: p._id, name: p.name } : null, netUnits, unitCost,
+        ...g, product: p ? { _id: p._id, name: p.name } : null, netUnits, unitCost, packQty,
         sales: r2(g.sales), refunds: r2(g.refunds), fees: r2(g.fees), net: r2(g.net), cogs: r2(cogs), profit: r2(profit),
         margin: revenue ? r2(profit / revenue * 100) : 0,
         feePct: g.sales ? r2(Math.abs(g.fees) / g.sales * 100) : 0,
@@ -564,14 +588,14 @@ router.get('/reorder', auth, permit('amazon', 'amazon:read', 'products:read'), a
     const lead = Math.max(0, +req.query.lead || 14);    // مدة توريد المورد
     const cover = Math.max(0, +req.query.cover || 30);  // عايز مخزون يكفي كام يوم بعد الوصول
     const since = new Date(Date.now() - days * 864e5);
-    const { resolve, products } = await buildResolver();
+    const { resolve, mult, parts, kitCost, products } = await buildResolver();
     const lines = await AmazonOrder.find({ purchaseDate: { $gte: since }, stage: { $ne: 'cancelled' } }).lean();
     const sold = {};
     const unmapped = new Set();
     for (const l of lines) {
       const p = resolve(l.sku, l.asin);
       if (!p) { unmapped.add(l.sku); continue; }
-      sold[p._id] = (sold[p._id] || 0) + l.qty;
+      for (const x of parts(l.sku, l.asin)) sold[x.p._id] = (sold[x.p._id] || 0) + l.qty * x.qty;
     }
     const rows = products.filter(p => p.active !== false).map(p => {
       const units = sold[p._id] || 0;
@@ -612,7 +636,7 @@ router.get('/listings', auth, permit('amazon', 'amazon:read'), async (req, res) 
     const days = Math.min(365, Math.max(7, +req.query.days || 30));
     const LEAD = 14, COVER = 30;
     const now = Date.now(), since = new Date(now - days * 864e5), prevSince = new Date(now - 2 * days * 864e5);
-    const { resolve, products } = await buildResolver();
+    const { resolve, mult, parts, kitCost, products } = await buildResolver();
     const [orders, txs, maps] = await Promise.all([
       AmazonOrder.find({ purchaseDate: { $gte: prevSince } }).select('sku asin productName qty itemPrice purchaseDate stage').lean(),
       AmazonTransaction.find({ date: { $gte: since }, sku: { $ne: '' } }).lean(),
@@ -646,7 +670,8 @@ router.get('/listings', auth, permit('amazon', 'amazon:read'), async (req, res) 
     const prodUnits = {}, prodListings = {};
     const rows = [...L.values()].map(x => {
       const p = resolve(x.sku, x.asin);
-      if (p) { prodUnits[p._id] = (prodUnits[p._id] || 0) + x.units; (prodListings[p._id] ||= []).push(x.sku); }
+      for (const k of parts(x.sku, x.asin)) prodUnits[k.p._id] = (prodUnits[k.p._id] || 0) + x.units * k.qty;
+      if (p) (prodListings[p._id] ||= []).push(x.sku);
       return { ...x, p };
     });
     const ranked = rows.filter(r => r.units > 0).sort((a, b) => b.units - a.units);
@@ -656,17 +681,22 @@ router.get('/listings', auth, permit('amazon', 'amazon:read'), async (req, res) 
     const out = rows.map(r => {
       const p = r.p;
       const productSells = p && prodUnits[p._id] > 0;
-      const perDay = p ? (prodUnits[p._id] || 0) / days : 0;
-      const daysLeft = p && perDay ? Math.floor(p.stock / perDay) : null;
-      const suggestedQty = p && perDay ? Math.max(0, Math.ceil(perDay * (LEAD + COVER) - p.stock)) : 0;
-      const cogs = p ? (r.sold - r.refunded) * (p.buyPrice || 0) : 0;
+      const packQty = mult(r.sku);
+      const kit = parts(r.sku, r.asin);
+      // الطقم بيقف لما أول مكوّن يخلص: ناخد المكوّن «عنق الزجاجة» (أقل أيام تغطية)
+      const comps = kit.map(k => { const pd = (prodUnits[k.p._id] || 0) / days; return { p: k.p, pd, left: pd ? Math.floor(k.p.stock / pd) : null, need: pd ? Math.max(0, Math.ceil(pd * (LEAD + COVER) - k.p.stock)) : 0 }; });
+      const neck = comps.find(c => c.p.stock <= 0 && c.pd) || comps.filter(c => c.left !== null).sort((x, y) => x.left - y.left)[0] || comps[0];
+      const daysLeft = neck ? neck.left : null;
+      const suggestedQty = neck ? neck.need : 0;
+      const neckName = kit.length > 1 && neck ? ` (${neck.p.name})` : '';
+      const cogs = p ? (r.sold - r.refunded) * kitCost(r.sku, r.asin) : 0;
       const profit = r.hasTx ? r2(r.net - cogs) : null;
       const returnRate = r.sold ? r2(r.refunded / r.sold * 100) : 0;
       const trend = r.prevUnits ? Math.round((r.units - r.prevUnits) / r.prevUnits * 100) : (r.units ? null : 0);
       const last = lastSale[r.sku.toLowerCase()] || null;
       let action = 'ok', why = '';
       if (!p) { action = 'unmapped'; why = 'الإعلان غير مربوط بصنف في المخزون — المبيعات مش بتخصم من الرصيد'; }
-      else if (r.units > 0 && (p.stock <= 0 || (daysLeft !== null && daysLeft <= LEAD))) { action = 'restock'; why = p.stock <= 0 ? `الرصيد خلص والإعلان بيبيع ${r.units} في ${days} يوم` : `الرصيد يكفي ${daysLeft} يوم بس — اطلب ${suggestedQty} وحدة`; }
+      else if (r.units > 0 && neck && (neck.p.stock <= 0 || (daysLeft !== null && daysLeft <= LEAD))) { action = 'restock'; why = neck.p.stock <= 0 ? `الرصيد خلص${neckName} والإعلان بيبيع ${r.units} في ${days} يوم` : `الرصيد يكفي ${daysLeft} يوم بس${neckName} — اطلب ${suggestedQty} وحدة`; }
       else if (profit !== null && profit < 0 && r.sold >= 2) { action = 'loss'; why = `صافي ${profit} بعد الرسوم والتكلفة — ارفع السعر أو راجع تكلفة الشراء`; }
       else if (r.sold >= 3 && returnRate >= 15) { action = 'returns'; why = `${returnRate}% مرتجع — راجع الصور والوصف والجودة`; }
       else if (r.prevUnits >= 3 && r.units <= r.prevUnits * 0.5) { action = 'declining'; why = `باع ${r.units} مقابل ${r.prevUnits} في الفترة اللي قبلها — راجع السعر والمنافسين${r.units === 0 ? '، واتأكد إن الإعلان شغال ومعاك الـ Buy Box' : ''}`; }
@@ -682,7 +712,7 @@ router.get('/listings', auth, permit('amazon', 'amazon:read'), async (req, res) 
         sku: r.sku, asin: r.asin, name: r.name || p?.name || '', units: r.units, prevUnits: r.prevUnits, trend, revenue: r2(r.revenue),
         profit, margin: profit !== null && r.revenue ? r2(profit / r.revenue * 100) : null, returnRate, refunded: r.refunded,
         lastSale: last, product: p ? { _id: p._id, name: p.name, stock: p.stock, listings: (prodListings[p._id] || []).length } : null,
-        daysLeft, suggestedQty, action, why, isStar: r.units > 0 && r.units >= topCut,
+        daysLeft, suggestedQty, action, why, packQty, parts: kit.length > 1 || packQty > 1 ? kit.map(k => `${k.p.name} ×${k.qty}`) : null, isStar: r.units > 0 && r.units >= topCut,
       };
     });
 
@@ -735,7 +765,7 @@ router.get('/overview', auth, permit('amazon', 'amazon:read'), async (req, res) 
     const now = new Date();
     const today = new Date(now); today.setHours(0, 0, 0, 0);
     const since30 = new Date(today - 29 * DAY);
-    const { resolve, products } = await buildResolver();
+    const { resolve, mult, parts, kitCost, products } = await buildResolver();
     const lines = await AmazonOrder.find({ purchaseDate: { $gte: since30 }, stage: { $ne: 'cancelled' } }).lean();
 
     const period = (from) => {
@@ -760,14 +790,14 @@ router.get('/overview', auth, permit('amazon', 'amazon:read'), async (req, res) 
       const p = resolve(l.sku, l.asin);
       const key = p ? String(p._id) : 'sku:' + l.sku;
       const t = (top[key] ||= { name: p?.name || l.productName || l.sku, mapped: !!p, stock: p?.stock, units: 0, sales: 0, skus: new Set() });
-      t.units += l.qty; t.sales += l.itemPrice; t.skus.add(l.sku);
+      t.units += l.qty * (p ? mult(l.sku) : 1); t.sales += l.itemPrice; t.skus.add(l.sku);
     }
     const topProducts = Object.values(top).sort((a, b) => b.units - a.units).slice(0, 10)
       .map(t => ({ ...t, sales: r2(t.sales), skus: [...t.skus] }));
 
     // النواقص: تحت حد التنبيه أو المخزون مش هيكفي 14 يوم بمعدل البيع الحالي
     const sold = {};
-    for (const l of lines) { const p = resolve(l.sku, l.asin); if (p) sold[p._id] = (sold[p._id] || 0) + l.qty; }
+    for (const l of lines) for (const x of parts(l.sku, l.asin)) sold[x.p._id] = (sold[x.p._id] || 0) + l.qty * x.qty;
     const lowStock = products.filter(p => p.active !== false).map(p => {
       const perDay = (sold[p._id] || 0) / 30;
       const daysLeft = perDay ? Math.floor(p.stock / perDay) : null;
@@ -780,8 +810,12 @@ router.get('/overview', auth, permit('amazon', 'amazon:read'), async (req, res) 
     for (const l of pending) {
       const p = resolve(l.sku, l.asin);
       const o = (pendingOrders[l.orderId] ||= { orderId: l.orderId, date: l.purchaseDate, stage: l.stage, items: [], short: false });
-      o.items.push({ name: p?.name || l.productName || l.sku, qty: l.qty });
-      if (p && p.stock < l.qty) o.short = true;   // المخزون مش مكفي الطلب
+      const kit = parts(l.sku, l.asin);
+      if (!kit.length) o.items.push({ name: l.productName || l.sku, qty: l.qty });
+      for (const x of kit) {
+        o.items.push({ name: x.p.name, qty: l.qty * x.qty });
+        if (x.p.stock < l.qty * x.qty) o.short = true;   // المخزون مش مكفي الطلب
+      }
     }
 
     res.json({

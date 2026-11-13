@@ -97,7 +97,7 @@ function readProducts(rows) {
       stock: idx.stock !== undefined ? Math.round(num(get(r, 'stock'))) : null,
       minStock: idx.minStock !== undefined && get(r, 'minStock') !== '' ? Math.round(num(get(r, 'minStock'))) : null,
       category: get(r, 'category'), supplier: get(r, 'supplier'), unit: get(r, 'unit'),
-      extraSkus: get(r, 'extraSkus').split(/[,،;|\n]+/).map(s => s.trim()).filter(Boolean),
+      extraSkus: get(r, 'extraSkus').split(/[,،;|\n]+/).map(s => s.trim()).filter(Boolean),   // «ABC-123×2» = إعلان باكدج فيه قطعتين
     });
   });
   // نفس الصنف متكرر بأكتر من SKU (إعلان لكل SKU في أمازون): يتجمع في كارت واحد
@@ -183,7 +183,11 @@ router.post('/products/import', auth, permit('products'), async (req, res) => {
         opRow.push(it);
         if (it.stock !== null && it.stock !== before)
           moves.push({ product: id, type: 'adjust', qty: Math.abs(it.stock - before), before, after: it.stock, reason: 'رصيد افتتاحي (استيراد)', reference: 'IMPORT', createdBy: req.user._id });
-        for (const sku of extra) mapOps.push({ updateOne: { filter: { sku }, update: { $set: { sku, product: id } }, upsert: true } });
+        for (const raw of extra) {
+          const m = String(raw).match(/^(.+?)\s*[x×*]\s*(\d+)$/i);
+          const sku = m ? m[1].trim() : raw, qty = m ? Math.max(1, +m[2]) : 1;
+          mapOps.push({ updateOne: { filter: { sku }, update: { $set: { sku, product: id, qty } }, upsert: true } });
+        }
       } catch (e) { errors.push({ row: it.row, name: it.name, message: e.message }); }
     }
     // التسجيل على دفعات — سطر فيه مشكلة ما يوقفش الباقي

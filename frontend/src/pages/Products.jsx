@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import KitModal from '../components/KitModal';
+import ProductPicker from '../components/ProductPicker';
 import api from '../utils/api';
 import { Card, Btn, Badge, Input, Select, Modal, Table, PageHeader, fmt, C_THEME as C, THEME } from '../components/UI';
 import toast from 'react-hot-toast';
@@ -30,6 +32,9 @@ export default function Products() {
   const [maps, setMaps] = useState([]);          // كل ربط SKU أمازون ← صنف
   const [skus, setSkus] = useState([]);          // SKUs الصنف المفتوح في الكارت
   const [skuInput, setSkuInput] = useState('');
+  const [kitSku, setKitSku] = useState(null);
+  const reloadMaps = () => api.get('/amazon/skus/maps').then(r => setMaps(r.data)).catch(() => {});
+  const kitLabel = (sku) => { const m = maps.find(x => x.sku === sku); if (!m) return ''; const n = 1 + (m.components || []).length; return n > 1 ? ` · طقم ${n} أصناف` : m.qty > 1 ? ` · ×${m.qty}` : ''; };
   const [moveSkus, setMoveSkus] = useState([]);  // SKUs هتتنقل من صنف تاني // 'form' = يملى خانة الباركود، 'search' = يبحث
 
   const load = () => {
@@ -66,8 +71,8 @@ export default function Products() {
     for (const sku of removed) await api.delete(`/amazon/skus/map/${encodeURIComponent(sku)}`);
   };
 
-  const openNew = () => { setSkus([]); setSkuInput(''); setMoveSkus([]); setEditing(null); setForm({ name:'', sku:'', asin:'', barcode:'', category:'', supplier:'', buyPrice:'', sellPrice:'', stock:'0', minStock:'5', unit:'قطعة', description:'' }); setModal(true); };
-  const openEdit = (p) => { setSkus(skusOf(p._id)); setSkuInput(''); setMoveSkus([]); setEditing(p._id); setForm({ name:p.name, sku:p.sku||'', asin:p.asin||'', barcode:p.barcode||'', category:p.category?._id||'', supplier:p.supplier?._id||'', buyPrice:p.buyPrice, sellPrice:p.sellPrice, stock:p.stock, minStock:p.minStock, unit:p.unit, description:p.description||'' }); setModal(true); };
+  const openNew = () => { setSkus([]); setSkuInput(''); setMoveSkus([]); setEditing(null); setForm({ name:'', sku:'', asin:'', barcode:'', category:'', supplier:'', buyPrice:'', sellPrice:'', stock:'0', minStock:'5', unit:'قطعة', description:'', isKit:false, components:[] }); setModal(true); };
+  const openEdit = (p) => { setSkus(skusOf(p._id)); setSkuInput(''); setMoveSkus([]); setEditing(p._id); setForm({ name:p.name, sku:p.sku||'', asin:p.asin||'', barcode:p.barcode||'', category:p.category?._id||'', supplier:p.supplier?._id||'', buyPrice:p.buyPrice, sellPrice:p.sellPrice, stock:p.stock, minStock:p.minStock, unit:p.unit, description:p.description||'', isKit:!!p.isKit, components:(p.components||[]).map(c => ({ product: String(c.product?._id || c.product), qty: c.qty || 1 })) }); setModal(true); };
 
   const save = async () => {
     try {
@@ -100,7 +105,7 @@ export default function Products() {
   };
 
   const columns = [
-    { key: 'name', title: 'المنتج', render: (v, r) => <div><div style={{ fontWeight: 600 }}>{v}</div><div style={{ fontSize: 11, color: 'var(--muted)', direction: 'ltr', textAlign: 'right' }}>{[r.sku, r.asin].filter(Boolean).join(' · ')}</div>{r.barcode && <div style={{ fontSize: 11, color: '#818cf8', fontFamily: 'monospace' }}>▮▯▮ {r.barcode}</div>}{skusOf(r._id).length > 0 && <div title={skusOf(r._id).join('\n')} style={{ fontSize: 11, color: '#f59e0b' }}>🔗 {skusOf(r._id).length} إعلان أمازون</div>}</div> },
+    { key: 'name', title: 'المنتج', render: (v, r) => <div><div style={{ fontWeight: 600 }}>{r.isKit && <span title={(r.components || []).map(c => `${c.qty} × ${c.name}`).join('\n')} style={{ fontSize: 11, color: '#a78bfa', border: '1px solid #8b5cf666', borderRadius: 10, padding: '1px 7px', marginLeft: 6 }}>📦 مركب من {(r.components || []).length}</span>}{v}</div><div style={{ fontSize: 11, color: 'var(--muted)', direction: 'ltr', textAlign: 'right' }}>{[r.sku, r.asin].filter(Boolean).join(' · ')}</div>{r.barcode && <div style={{ fontSize: 11, color: '#818cf8', fontFamily: 'monospace' }}>▮▯▮ {r.barcode}</div>}{skusOf(r._id).length > 0 && <div title={skusOf(r._id).join('\n')} style={{ fontSize: 11, color: '#f59e0b' }}>🔗 {skusOf(r._id).length} إعلان أمازون</div>}</div> },
     { key: 'category', title: 'الفئة', render: (v) => v ? <Badge color={v.color || '#6366f1'}>{v.name}</Badge> : '—' },
     { key: 'buyPrice', title: 'سعر الشراء', render: v => `${fmt(v)} ${CUR}` },
     { key: 'sellPrice', title: 'سعر البيع', render: v => `${fmt(v)} ${CUR}` },
@@ -110,7 +115,7 @@ export default function Products() {
       <div style={{ display: 'flex', gap: 6 }}>
         {can('products') && <Btn size="sm" variant="ghost" onClick={() => openEdit(r)}>✏️</Btn>}
         <Btn size="sm" variant="ghost" onClick={() => setLabels({ [r._id]: 1 })}>🏷️</Btn>
-        {can('stock') && <Btn size="sm" variant="warning" onClick={() => { setAdjustModal(r); setAdjustQty(''); setAdjustReason(''); }}>📦</Btn>}
+        {can('stock') && !r.isKit && <Btn size="sm" variant="warning" onClick={() => { setAdjustModal(r); setAdjustQty(''); setAdjustReason(''); }}>📦</Btn>}
       </div>
     )}
   ];
@@ -159,7 +164,8 @@ export default function Products() {
               {form.sku && <Badge color="#64748b">{form.sku} (الرمز الأساسي)</Badge>}
               {skus.map(x => (
                 <span key={x} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: '#f59e0b22', color: '#fbbf24', border: '1px solid #f59e0b44', borderRadius: 20, padding: '3px 6px 3px 10px', fontSize: 12, fontFamily: 'monospace' }}>
-                  {x}{moveSkus.includes(x) && ' ↩'}
+                  {x}{moveSkus.includes(x) && ' ↩'}<span style={{ color: '#a78bfa', fontFamily: 'inherit' }}>{kitLabel(x)}</span>
+                  {maps.some(m => m.sku === x && m.product === editing) && <button onClick={() => setKitSku(x)} title="محتوى الإعلان (كام قطعة / أصناف تانية معاه)" style={{ background: 'none', border: 'none', color: '#a78bfa', cursor: 'pointer', fontSize: 13, lineHeight: 1 }}>⚙</button>}
                   <button onClick={() => setSkus(skus.filter(y => y !== x))} style={{ background: 'none', border: 'none', color: '#f87171', cursor: 'pointer', fontSize: 14, lineHeight: 1 }}>×</button>
                 </span>
               ))}
@@ -183,9 +189,51 @@ export default function Products() {
           <Select label="المورد" value={form.supplier} onChange={v => setForm({...form,supplier:v})} options={suppliers.map(s => ({ value: s._id, label: s.name }))} />
           <Input label={`سعر الشراء (${CUR})`} type="number" value={form.buyPrice} onChange={v => setForm({...form,buyPrice:v})} required />
           <Input label={`سعر البيع (${CUR})`} type="number" value={form.sellPrice} onChange={v => setForm({...form,sellPrice:v})} required />
-          {!editing && <Input label="الكمية الابتدائية" type="number" value={form.stock} onChange={v => setForm({...form,stock:v})} />}
+          {!editing && !form.isKit && <Input label="الكمية الابتدائية" type="number" value={form.stock} onChange={v => setForm({...form,stock:v})} />}
           <Input label="حد التنبيه (مخزون منخفض)" type="number" value={form.minStock} onChange={v => setForm({...form,minStock:v})} />
           <Input label="الوحدة" value={form.unit} onChange={v => setForm({...form,unit:v})} />
+        </div>
+
+        {/* صنف مركب: لما يخرج بتخرج مكوناته */}
+        <div style={{ border: `1px dashed ${form.isKit ? '#8b5cf6' : 'var(--border)'}`, borderRadius: 10, padding: 12, marginBottom: 12 }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontWeight: 700, fontSize: 14 }}>
+            <input type="checkbox" checked={!!form.isKit} onChange={e => setForm({ ...form, isKit: e.target.checked, components: e.target.checked && !form.components?.length ? [{ product: '', qty: 1 }] : form.components })} />
+            صنف مركب (طقم من أكتر من صنف)
+          </label>
+          {form.isKit && (
+            <div style={{ marginTop: 10 }}>
+              <div style={{ fontSize: 12, color: 'var(--sub)', marginBottom: 8 }}>لما الصنف ده يخرج في شحنة، بتخرج القطع دي من المخزون. رصيده بيتحسب من رصيد مكوناته.</div>
+              {form.components.map((c, i) => {
+                const cp = products.find(p => p._id === c.product);
+                const setC = (patch) => setForm(f => ({ ...f, components: f.components.map((x, k) => k === i ? { ...x, ...patch } : x) }));
+                return (
+                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
+                    <span style={{ width: 70, fontSize: 12, color: 'var(--sub)', fontWeight: 700 }}>القطعة {i + 1}</span>
+                    {cp
+                      ? <div style={{ flex: 1, minWidth: 200, display: 'flex', alignItems: 'center', gap: 6, background: 'var(--bg)', border: '1px solid #8b5cf666', borderRadius: 6, padding: '6px 10px', fontSize: 13 }}>
+                          <span style={{ flex: 1 }}>{cp.name} <span style={{ fontSize: 11, color: 'var(--muted)' }}>· الرصيد {cp.stock}</span></span>
+                          <button type="button" onClick={() => setC({ product: '' })} title="تغيير" style={{ background: 'none', border: 'none', color: '#a5b4fc', cursor: 'pointer', fontSize: 12 }}>تغيير</button>
+                        </div>
+                      : <div style={{ flex: 1, minWidth: 200 }}><ProductPicker products={products.filter(p => !p.isKit && p._id !== editing && !form.components.some(x => x.product === p._id))} onSelect={(id) => setC({ product: id })} width="100%" placeholder="ابحث عن الصنف..." /></div>}
+                    <span style={{ fontSize: 12, color: 'var(--sub)' }}>الكمية</span>
+                    <input type="number" min="1" value={c.qty} onChange={e => setC({ qty: Math.max(1, Math.round(+e.target.value || 1)) })} style={{ width: 56, textAlign: 'center', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 6, padding: '6px', color: 'var(--text)', fontWeight: 700 }} />
+                    <button type="button" onClick={() => setForm(f => ({ ...f, components: f.components.filter((_, k) => k !== i) }))} title="حذف القطعة" style={{ background: 'none', border: 'none', color: '#f87171', cursor: 'pointer', fontSize: 15 }}>✕</button>
+                  </div>
+                );
+              })}
+              {form.components.length < 6 && <Btn size="sm" variant="ghost" onClick={() => setForm(f => ({ ...f, components: [...f.components, { product: '', qty: 1 }] }))}>+ إضافة قطعة ({form.components.length}/6)</Btn>}
+              {(() => {
+                const ok = form.components.filter(c => c.product).map(c => ({ ...c, p: products.find(p => p._id === c.product) })).filter(c => c.p);
+                if (!ok.length) return null;
+                const cost = ok.reduce((t, c) => t + (c.p.buyPrice || 0) * c.qty, 0);
+                const avail = Math.min(...ok.map(c => Math.floor(c.p.stock / c.qty)));
+                return <div style={{ marginTop: 8, fontSize: 12, color: 'var(--sub)', background: 'var(--bg)', borderRadius: 8, padding: '8px 10px' }}>
+                  تكلفة الطقم: <b>{fmt(cost)} {CUR}</b> · المتاح منه حالياً: <b style={{ color: avail > 0 ? '#10b981' : '#f87171' }}>{Math.max(0, avail)}</b>
+                  {Number(form.buyPrice) !== Math.round(cost * 100) / 100 && <button type="button" onClick={() => setForm(f => ({ ...f, buyPrice: Math.round(cost * 100) / 100 }))} style={{ marginRight: 8, background: 'none', border: 'none', color: '#a5b4fc', cursor: 'pointer', fontSize: 12, textDecoration: 'underline' }}>استخدمها كسعر شراء</button>}
+                </div>;
+              })()}
+            </div>
+          )}
         </div>
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 8 }}>
           <Btn variant="ghost" onClick={() => setModal(false)}>إلغاء</Btn>
@@ -195,6 +243,8 @@ export default function Products() {
 
       <CameraScanner open={!!cam} onClose={() => setCam('')} title={cam === 'form' ? 'مسح باركود المصنّع' : 'البحث بالباركود'}
         onScan={code => { if (cam === 'form') setForm(f => ({ ...f, barcode: code })); else setSearch(code); }} />
+      <KitModal open={!!kitSku} onClose={() => setKitSku(null)} sku={kitSku} products={products} onSaved={reloadMaps}
+        map={kitSku && (maps.find(m => m.sku === kitSku) || { product: editing, qty: 1, components: [] })} />
       <LabelModal open={!!labels} onClose={() => setLabels(null)} products={products} maps={maps} initial={labels || {}} />
 
       {/* Adjust Stock Modal */}

@@ -70,18 +70,19 @@ router.get('/categories', auth, async (req, res) => {
     const days = Math.min(365, Math.max(7, +req.query.days || 30));
     const since = new Date(Date.now() - days * 864e5);
     const r2 = (n) => Math.round((n || 0) * 100) / 100;
-    const [cats, { resolve, products }, orders] = await Promise.all([
+    const [cats, { resolve, parts, products }, orders] = await Promise.all([
       Category.find().lean(),
       buildResolver(),
       AmazonOrder.find({ purchaseDate: { $gte: since }, stage: { $ne: 'cancelled' } }).select('sku asin qty itemPrice').lean(),
     ]);
-    const full = await Product.find({ active: { $ne: false } }).select('category stock minStock buyPrice').lean();
+    const full = await Product.find({ active: { $ne: false }, isKit: { $ne: true } }).select('category stock minStock buyPrice').lean();
     const catOf = new Map(full.map(p => [String(p._id), p.category ? String(p.category) : 'none']));
 
     const sold = {};      // productId → { units, revenue }
     for (const o of orders) {
-      const p = resolve(o.sku, o.asin); if (!p) continue;
-      const x = (sold[p._id] ||= { units: 0, revenue: 0 }); x.units += o.qty; x.revenue += o.itemPrice;
+      const kit = parts(o.sku, o.asin); if (!kit.length) continue;
+      const share = o.itemPrice / kit.length;           // إيراد الطقم بيتقسم على مكوناته
+      for (const k of kit) { const x = (sold[k.p._id] ||= { units: 0, revenue: 0 }); x.units += o.qty * k.qty; x.revenue += share; }
     }
     const G = {};
     const g = (id) => (G[id] ||= { _id: id, products: 0, inStock: 0, out: 0, low: 0, units: 0, value: 0, noCost: 0, selling: 0, soldUnits: 0, revenue: 0, deadValue: 0, outSelling: 0 });

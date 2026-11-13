@@ -145,11 +145,19 @@ router.post('/:id/post', auth, permit('shipments_post'), async (req, res) => {
     if (!s.customer) return res.status(400).json({ message: 'يُرجى اختيار العميل (أمازون / نون / جوميا ...)' });
     if (!s.items.length) return res.status(400).json({ message: 'الشحنة لا تحتوي على أصناف' });
 
-    const prods = await Product.find({ _id: { $in: s.items.map(i => i.product) } });
+    const kitProds = await Product.find({ _id: { $in: s.items.map(i => i.product) }, isKit: true }).lean();
+    const kitById = new Map(kitProds.map(k => [String(k._id), k]));
+    // الصنف المركب بيتفك لمكوناته: كل مكوّن × كميته × عدد الأطقم
+    const expanded = s.items.flatMap(i => {
+      const k = kitById.get(String(i.product));
+      if (!k) return [i];
+      return (k.components || []).map(c => ({ product: c.product, qty: i.qty * (c.qty || 1), type: i.type, dest: i.dest, note: i.note, photos: i.photos, kitName: k.name }));
+    });
+    const prods = await Product.find({ _id: { $in: expanded.map(i => i.product) } });
     const byId = new Map(prods.map(p => [String(p._id), p]));
     // المرتجع التالف ما بيدخلش المخزون الرئيسي — بيروح مخزن التوالف
-    const damaged = s.items.filter(i => i.type === 'return' && i.dest === 'damaged');
-    const stockItems = s.items.filter(i => !(i.type === 'return' && i.dest === 'damaged'));
+    const damaged = expanded.filter(i => i.type === 'return' && i.dest === 'damaged');
+    const stockItems = expanded.filter(i => !(i.type === 'return' && i.dest === 'damaged'));
     // الرصيد بعد المرتجع والمبيعات لكل صنف
     const after = {};
     for (const i of stockItems) {
@@ -171,14 +179,14 @@ router.post('/:id/post', auth, permit('shipments_post'), async (req, res) => {
       await p.save();
       await StockMovement.create({
         product: p._id, type: i.type === 'return' ? 'return' : 'out', qty: i.qty, before, after: p.stock,
-        reason: reasonFor(i.type, s.customer), reference: s.no, createdBy: req.user._id
+        reason: reasonFor(i.type, s.customer) + (i.kitName ? ` (طقم: ${i.kitName})` : ''), reference: s.no, createdBy: req.user._id
       });
     }
     for (const i of damaged) {
       const p = byId.get(String(i.product));
       await Damaged.create({
         product: i.product, name: p?.name || i.name, barcode: p?.barcode || i.barcode, qty: i.qty, unitCost: p?.buyPrice || 0,
-        shipment: s._id, shipmentNo: s.no, employee: s.employee, note: i.note, photos: i.photos,
+        shipment: s._id, shipmentNo: s.no, employee: s.employee, note: [i.kitName && `من طقم ${i.kitName}`, i.note].filter(Boolean).join(' — '), photos: i.photos,
         history: [{ status: 'pending', note: 'مرتجع تالف من الشحنة ' + s.no, by: req.user._id }], createdBy: req.user._id
       });
     }
@@ -224,20 +232,31 @@ function readAmazonFile(rows) {
 
 // يحسب المطابقة لكل صنف: اللي اتضرب بالاسكانر قصاد اللي في ملف أمازون
 async function computeMatch(s) {
-  const { resolve } = await buildResolver();
+  const { parts, products } = await buildResolver();
+  const pById = new Map(products.map(p => [String(p._id), p]));
   const rows = {};
   const row = (id, name) => (rows[id] ||= { product: id, name, scannedSale: 0, amazonSale: 0, scannedReturn: 0, amazonReturn: 0, skus: [] });
   for (const i of s.items) {
-    const r = row(String(i.product?._id || i.product), i.product?.name || i.name);
-    if (i.type === 'return') r.scannedReturn += i.qty; else r.scannedSale += i.qty;
+    const id = String(i.product?._id || i.product);
+    const p = pById.get(id);
+    // الصنف المركب بيتقارن بمكوناته
+    const list = p?.isKit && p.components?.length
+      ? p.components.map(c => ({ id: String(c.product), name: pById.get(String(c.product))?.name || '؟', qty: i.qty * (c.qty || 1) }))
+      : [{ id, name: i.product?.name || i.name, qty: i.qty }];
+    for (const x of list) {
+      const r = row(x.id, x.name);
+      if (i.type === 'return') r.scannedReturn += x.qty; else r.scannedSale += x.qty;
+    }
   }
   const unmapped = [];
   for (const a of s.match?.amazon || []) {
-    const p = resolve(a.sku);
-    if (!p) { unmapped.push(a); continue; }
-    const r = row(String(p._id), p.name);
-    r.amazonSale += a.sale; r.amazonReturn += a.ret;
-    r.skus.push(a.sku);
+    const kit = parts(a.sku);                     // إعلان باكدج/طقم: كل مكوّن بكميته
+    if (!kit.length) { unmapped.push(a); continue; }
+    for (const { p, qty: k } of kit) {
+      const r = row(String(p._id), p.name);
+      r.amazonSale += a.sale * k; r.amazonReturn += a.ret * k;
+      r.skus.push(k > 1 || kit.length > 1 ? `${a.sku} ×${k}` : a.sku);
+    }
   }
   const list = Object.values(rows).map(r => {
     const saleDiff = r.scannedSale - r.amazonSale;

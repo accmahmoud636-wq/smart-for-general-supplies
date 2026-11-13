@@ -120,10 +120,16 @@ prodRouter.get('/barcode/:code', auth, async (req, res) => {
     const { AmazonSkuMap } = require('../models/amazon');
     const m = await AmazonSkuMap.findOne({ sku: exact }).lean();
     const mp = m && await Product.findOne({ _id: m.product, active: { $ne: false } }).lean();
-    if (mp) return res.json(mp);
+    if (mp) {
+      // مسح ملصق إعلان باكدج/طقم = كل مكوّن بكميته
+      const comps = (m.components || []).length ? await Product.find({ _id: { $in: m.components.map(c => c.product) } }).select('name barcode stock').lean() : [];
+      const parts = [{ _id: mp._id, name: mp.name, barcode: mp.barcode, stock: mp.stock, qty: m.qty || 1 },
+        ...(m.components || []).map(c => { const x = comps.find(p => String(p._id) === String(c.product)); return x && { _id: x._id, name: x.name, barcode: x.barcode, stock: x.stock, qty: c.qty || 1 }; }).filter(Boolean)];
+      return res.json({ ...mp, packQty: m.qty || 1, packSku: m.sku, parts });
+    }
     return res.status(404).json({ message: 'باركود غير مسجل: ' + code });
   }
-  res.json(p);
+  res.json((await withKitStock([p]))[0]);
 });
 
 // توليد باركود لكل المنتجات اللي ملهاش
@@ -148,7 +154,7 @@ prodRouter.get('/', auth, async (req, res) => {
   let query = Product.find(q).populate('category','name color').populate('supplier','name');
   if (lowStock === 'true') query = query.where('stock').lte(mongoose.Types.Decimal128.fromString('0') || 0);
   const products = await Product.find(q).populate('category','name color').populate('supplier','name').sort('-createdAt');
-  const result = lowStock === 'true' ? products.filter(p => p.stock <= p.minStock) : products;
+  const result = await withKitStock(lowStock === 'true' ? products.filter(p => p.stock <= p.minStock) : products);
   res.json(result);
 });
 
@@ -162,6 +168,39 @@ prodRouter.get('/:id', auth, async (req, res) => {
   res.json(p);
 });
 
+// الصنف المركب: مكونات صالحة (لحد 6، من غير تكرار، ومن غير الصنف نفسه أو أطقم جوه أطقم)
+async function cleanKit(body, selfId) {
+  if (body.isKit === undefined && body.components === undefined) return null;
+  if (!body.isKit) { body.isKit = false; body.components = []; return null; }
+  const seen = new Set();
+  const comps = (Array.isArray(body.components) ? body.components : [])
+    .map(c => ({ product: String(c.product?._id || c.product || ''), qty: Math.max(1, Math.round(+c.qty || 1)) }))
+    .filter(c => c.product && c.product !== String(selfId || '') && !seen.has(c.product) && seen.add(c.product));
+  if (!comps.length) return 'اختر مكونات الصنف المركب (قطعة واحدة على الأقل)';
+  if (comps.length > 6) return 'الحد الأقصى 6 مكونات للصنف المركب';
+  const found = await Product.find({ _id: { $in: comps.map(c => c.product) } }).select('isKit').lean();
+  if (found.length !== comps.length) return 'أحد المكونات غير موجود';
+  if (found.some(p => p.isKit)) return 'لا يمكن إضافة صنف مركب داخل صنف مركب';
+  body.components = comps; body.stock = 0;            // الرصيد بيتحسب من المكونات
+  return null;
+}
+// رصيد الصنف المركب المتاح = أقل (رصيد المكوّن ÷ كميته)
+async function withKitStock(list) {
+  const kits = list.filter(p => p.isKit && p.components?.length);
+  if (!kits.length) return list;
+  const ids = [...new Set(kits.flatMap(k => k.components.map(c => String(c.product?._id || c.product))))];
+  const comps = new Map((await Product.find({ _id: { $in: ids } }).select('name stock buyPrice').lean()).map(p => [String(p._id), p]));
+  return list.map(p => {
+    if (!p.isKit) return p;
+    const o = p.toObject ? p.toObject() : { ...p };
+    const parts = (o.components || []).map(c => ({ ...c, item: comps.get(String(c.product?._id || c.product)) })).filter(c => c.item);
+    o.stock = parts.length ? Math.max(0, Math.min(...parts.map(c => Math.floor(c.item.stock / c.qty)))) : 0;
+    o.kitCost = parts.reduce((t, c) => t + (c.item.buyPrice || 0) * c.qty, 0);
+    o.components = parts.map(c => ({ product: String(c.item._id), name: c.item.name, stock: c.item.stock, qty: c.qty }));
+    return o;
+  });
+}
+
 // الفئة والمورد اختياريين: الخانة الفاضية تتحفظ «بدون» بدل ما تعمل خطأ
 const cleanRefs = (body, unset) => {
   for (const k of ['category', 'supplier']) {
@@ -174,6 +213,8 @@ const cleanRefs = (body, unset) => {
 prodRouter.post('/', auth, permit('products'), async (req, res) => {
   try {
     const body = cleanRefs({ ...req.body, barcode: String(req.body.barcode || '').trim() });
+    const kitErr = await cleanKit(body);
+    if (kitErr) return res.status(400).json({ message: kitErr });
     if (!body.barcode) body.barcode = (await nextBarcodes(1))[0];          // باركود تلقائي
     else if (await barcodeTaken(body.barcode)) return res.status(400).json({ message: 'الباركود مستخدم لصنف آخر' });
     res.status(201).json(await Product.create(body));
@@ -185,7 +226,10 @@ prodRouter.put('/:id', auth, permit('products'), async (req, res) => {
   try {
     const unset = {};
     const body = cleanRefs({ ...req.body }, unset);
-    delete body._id; delete body.createdAt; delete body.updatedAt; delete body.__v;
+    delete body._id; delete body.createdAt; delete body.updatedAt; delete body.__v; delete body.kitCost;
+    const kitErr = await cleanKit(body, req.params.id);
+    if (kitErr) return res.status(400).json({ message: kitErr });
+    if (body.isKit === undefined && (await Product.exists({ _id: req.params.id, isKit: true }))) delete body.stock;   // رصيد الطقم مايتعدلش يدوي
     if (body.barcode !== undefined) {
       body.barcode = String(body.barcode || '').trim();
       if (await barcodeTaken(body.barcode, req.params.id)) return res.status(400).json({ message: 'الباركود مستخدم لصنف آخر' });
@@ -204,6 +248,7 @@ prodRouter.post('/:id/adjust', auth, permit('stock'), async (req, res) => {
   try {
     const { qty, reason } = req.body;
     const product = await Product.findById(req.params.id);
+    if (product?.isKit) return res.status(400).json({ message: 'رصيد الصنف المركب بيتحسب من مكوناته — سوّي رصيد المكونات' });
     const before = product.stock;
     const after = before + qty;
     product.stock = after;

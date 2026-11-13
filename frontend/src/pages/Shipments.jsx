@@ -126,11 +126,11 @@ function ShipmentEditor({ id: initialId, onBack, onPosted }) {
 
   const say = (ok, text) => { beep(ok); setFlash({ ok, text }); };
 
-  const addItem = (p, type) => {
+  const addItem = (p, type, n = 1) => {
     const list = [...itemsRef.current];
-    const row = { product: p._id, name: p.name, barcode: p.barcode, stock: p.stock, qty: 1, type, dest: 'main', note: '', photos: [] };
+    const row = { product: p._id, name: p.name, barcode: p.barcode, stock: p.stock, qty: n, type, dest: 'main', note: '', photos: [] };
     const i = list.findIndex(x => sameRow(x, row));
-    if (i >= 0) { list[i] = { ...list[i], qty: list[i].qty + 1 }; list.unshift(list.splice(i, 1)[0]); }
+    if (i >= 0) { list[i] = { ...list[i], qty: list[i].qty + n }; list.unshift(list.splice(i, 1)[0]); }
     else list.unshift(row);
     setItems(list); setDirty(true);
     return list[0].qty;
@@ -143,6 +143,12 @@ function ShipmentEditor({ id: initialId, onBack, onPosted }) {
     if (!v) return;
     try {
       const { data: p } = await api.get(`/products/barcode/${encodeURIComponent(v)}`);
+      // ملصق إعلان باكدج/طقم: كل مكوّن بيتسجل بكميته
+      if (p.parts && (p.parts.length > 1 || p.parts[0].qty > 1)) {
+        for (const x of p.parts) addItem(x, mode, x.qty);
+        say(true, `${TYPES[mode].icon} طقم ${p.packSku}: ${p.parts.map(x => `${x.qty > 1 ? x.qty + '× ' : ''}${x.name}`).join(' + ')} — ${TYPES[mode].label}`);
+        return;
+      }
       const q = addItem(p, mode);
       say(true, `${TYPES[mode].icon} ${p.name} — ${TYPES[mode].label} (${q})`);
     } catch (e) { say(false, '❌ ' + err(e)); }
