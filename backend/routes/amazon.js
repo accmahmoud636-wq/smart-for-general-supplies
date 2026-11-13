@@ -228,7 +228,14 @@ async function importOrders(rows) {
     for (const m of manualLines) if (m.sale) manualSale[m.orderId] = m.sale;
     if (manualLines.length) await AmazonOrder.deleteMany({ _id: { $in: manualLines.map(m => m._id) } });
 
-    let inserted = 0, updated = 0, skipped = 0;
+    // كل الطلبات الموجودة بقراءة واحدة بدل بحث لكل سطر
+    const ex = new Map();
+    for (let i = 0; i < fileIds.length; i += 1000) {
+      for (const o of await AmazonOrder.find({ orderId: { $in: fileIds.slice(i, i + 1000) } }).select('orderId sku stage asin productName qty itemPrice shippingPrice purchaseDate amazonStatus city product').lean()) ex.set(o.orderId + '|' + o.sku, o);
+    }
+    const fresh = new Map();   // أسطر جديدة (لو اتكررت في نفس الملف الأخير بيكسب)
+    const upd = new Map();     // _id ← التحديث
+    let skipped = 0, unchanged = 0;
     for (const r of rows.slice(headerRow + 1)) {
       const orderId = String(get(r, 'orderId') || '').trim();
       const sku = String(get(r, 'sku') || '').trim();
@@ -246,21 +253,34 @@ async function importOrders(rows) {
         amazonStatus: status, city: String(get(r, 'city') || '').trim(),
         product: prod?._id
       };
-      const existing = await AmazonOrder.findOne({ orderId, sku });
+      const key = orderId + '|' + sku, existing = ex.get(key);
       if (!existing) {
+        const prev = fresh.get(key);
         const ms = manualSale[orderId];
-        await AmazonOrder.create({ orderId, sku, ...data, stage: ms && STAGE_RANK[amzStage] < STAGE_RANK.shipped ? 'shipped' : amzStage, sale: ms || undefined });
-        inserted++;
+        let stage = ms && STAGE_RANK[amzStage] < STAGE_RANK.shipped ? 'shipped' : amzStage;
+        if (prev && STAGE_RANK[prev.stage] > STAGE_RANK[stage]) stage = prev.stage;
+        fresh.set(key, { orderId, sku, ...data, stage, sale: ms || undefined });
       } else {
-        Object.assign(existing, data);
         // أمازون تقدّم المرحلة فقط ولا ترجعها للخلف (عشان ما تمسحش التجهيز اليدوي)
-        if (STAGE_RANK[amzStage] > STAGE_RANK[existing.stage]) existing.stage = amzStage;
-        if (!existing.itemPrice && !data.itemPrice) existing.itemPrice = 0;
-        await existing.save();
-        updated++;
+        const set = { ...data };
+        if (STAGE_RANK[amzStage] > STAGE_RANK[existing.stage]) { set.stage = amzStage; existing.stage = amzStage; }
+        const u = { $set: set };
+        if (!prod) { delete set.product; u.$unset = { product: 1 }; }
+        if (!set.purchaseDate) delete set.purchaseDate;
+        // السطر ما اتغيرش؟ منكتبوش تاني (رفع نفس الفترة بيبقى لحظي)
+        const same = (a, b) => (a instanceof Date || b instanceof Date) ? +new Date(a || 0) === +new Date(b || 0) : String(a ?? '') === String(b ?? '');
+        const changed = Object.keys(set).some(k => !same(set[k], existing[k])) || (!prod && existing.product);
+        if (changed) { upd.set(String(existing._id), u); Object.assign(existing, set); if (!prod) delete existing.product; }
+        else unchanged++;
       }
     }
-    return { message: `تم: ${inserted} جديد، ${updated} محدّث، ${skipped} متجاهل`, inserted, updated, skipped };
+    const ops = [
+      ...[...fresh.values()].map(d => { if (!d.purchaseDate) delete d.purchaseDate; if (!d.product) delete d.product; if (!d.sale) delete d.sale; return { insertOne: { document: d } }; }),
+      ...[...upd.entries()].map(([_id, update]) => ({ updateOne: { filter: { _id }, update } })),
+    ];
+    for (let i = 0; i < ops.length; i += 500) await AmazonOrder.bulkWrite(ops.slice(i, i + 500), { ordered: false });
+    const inserted = fresh.size, updated = upd.size;
+    return { message: `تم: ${inserted} جديد، ${updated} محدّث${unchanged ? `، ${unchanged} بدون تغيير` : ''}${skipped ? `، ${skipped} متجاهل` : ''}`, inserted, updated, unchanged, skipped };
   }
 }
 
