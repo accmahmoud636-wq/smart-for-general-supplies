@@ -56,4 +56,21 @@ router.put('/:id', auth, permit('sales'), async (req, res) => {
   } catch(e){ res.status(400).json({ message: e.message }); }
 });
 
+// حذف فاتورة بيع: الكميات ترجع للمخزون (الطقم بيرجّع مكوناته)
+router.delete('/:id', auth, permit('sales'), async (req, res) => {
+  try {
+    const s = await Sale.findById(req.params.id);
+    if (!s) return res.status(404).json({ message: 'الفاتورة غير موجودة' });
+    const { moveStock } = require('../utils/stock');
+    // فاتورة مرتجعة: المخزون رجع قبل كده — مايترجعش تاني
+    if (s.status !== 'returned')
+      for (const i of s.items) await moveStock(i.product, i.qty, { type: 'return', reason: 'حذف فاتورة مبيعات', reference: s.invoiceNo, userId: req.user._id });
+    // لو الفاتورة جاية من طلب أمازون: الطلب يرجع «غير مرحّل»
+    const { AmazonOrder } = require('../models/amazon');
+    await AmazonOrder.updateMany({ sale: s._id }, { $unset: { sale: 1 } });
+    await s.deleteOne();
+    res.json({ message: `تم حذف الفاتورة ${s.invoiceNo} وإرجاع الكميات للمخزون` });
+  } catch (e) { res.status(500).json({ message: e.message }); }
+});
+
 module.exports = router;

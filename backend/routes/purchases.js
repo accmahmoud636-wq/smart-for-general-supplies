@@ -58,4 +58,17 @@ router.put('/:id', auth, permit('purchases'), async (req, res) => {
   } catch(e){ res.status(400).json({ message: e.message }); }
 });
 
+// حذف فاتورة شراء: الكميات تتخصم من المخزون، والمتبقي للمورد يتشال من رصيده
+router.delete('/:id', auth, permit('purchases'), async (req, res) => {
+  try {
+    const p = await Purchase.findById(req.params.id);
+    if (!p) return res.status(404).json({ message: 'الفاتورة غير موجودة' });
+    const { moveStock } = require('../utils/stock');
+    for (const i of p.items) await moveStock(i.product, -i.qty, { type: 'out', reason: 'حذف فاتورة شراء', reference: p.invoiceNo, userId: req.user._id });
+    if (p.total > p.paid) await Supplier.findByIdAndUpdate(p.supplier, { $inc: { balance: -(p.total - p.paid) } });
+    await p.deleteOne();
+    res.json({ message: `تم حذف الفاتورة ${p.invoiceNo} وخصم الكميات من المخزون` });
+  } catch (e) { res.status(500).json({ message: e.message }); }
+});
+
 module.exports = router;

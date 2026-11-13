@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import api from '../utils/api';
 import { Card, Btn, Badge, Input, Select, Modal, Table, PageHeader, StatCard, fmt, fmtDate, C_THEME as C, THEME } from '../components/UI';
 import toast from 'react-hot-toast';
+import { ProductSelect } from '../components/ProductPicker';
 import { useAuth } from '../context/AuthContext';
 
 const CUR = THEME.currency || 'ج.م';
@@ -52,7 +53,13 @@ export function Purchases() {
     { key:'total', title:'الإجمالي', render:v=><span style={{fontWeight:700}}>{fmt(v)} {CUR}</span> },
     { key:'paid', title:'المدفوع', render:(v,r)=><span style={{color:v>=r.total?'#10b981':'#f59e0b',fontWeight:700}}>{fmt(v)} {CUR}</span> },
     { key:'status', title:'الحالة', render:v=><Badge color={STATUS_COLORS[v]||'#64748b'}>{STATUS_LABELS[v]||v}</Badge> },
+    { key:'_id', title:'', render:(_,r)=>can('purchases') && <Btn size="sm" variant="danger" onClick={()=>delPurchase(r)} title="حذف الفاتورة">🗑️</Btn> },
   ];
+  const delPurchase = async (r) => {
+    if (!confirm(`حذف فاتورة الشراء ${r.invoiceNo}؟\nسيتم خصم كمياتها من المخزون${r.total > r.paid ? ' وتعديل رصيد المورد' : ''}.`)) return;
+    try { const { data } = await api.delete(`/purchases/${r._id}`); toast.success(data.message); load(); }
+    catch (e) { toast.error(e.response?.data?.message || 'خطأ'); }
+  };
 
   const totalAmount = items.reduce((s,i)=>s+i.total,0);
   const totalPaid = items.reduce((s,i)=>s+i.paid,0);
@@ -77,11 +84,7 @@ export function Purchases() {
           <div style={{fontSize:12,color:'var(--sub)',marginBottom:8,fontWeight:600}}>المنتجات</div>
           {lines.map((line,i)=>(
             <div key={i} style={{display:'flex',gap:8,marginBottom:8,alignItems:'center'}}>
-              <select value={line.product} onChange={e=>updateLine(i,'product',e.target.value)}
-                style={{flex:2,background:'var(--bg)',border:'1px solid var(--border)',borderRadius:8,padding:'8px 10px',color:'var(--text)',fontSize:13,outline:'none'}}>
-                <option value="">-- المنتج --</option>
-                {products.map(p=><option key={p._id} value={p._id}>{p.name}</option>)}
-              </select>
+              <ProductSelect products={products} value={line.product} onChange={v=>updateLine(i,'product',v)} style={{flex:2}} />
               <input type="number" value={line.qty} onChange={e=>updateLine(i,'qty',e.target.value)} placeholder="الكمية" min="1"
                 style={{width:70,background:'var(--bg)',border:'1px solid var(--border)',borderRadius:8,padding:'8px 10px',color:'var(--text)',fontSize:13,outline:'none'}} />
               <input type="number" value={line.price} onChange={e=>updateLine(i,'price',e.target.value)} placeholder="السعر"
@@ -150,7 +153,13 @@ export function Sales() {
     { key:'amazonOrderId', title:'رقم Amazon' },
     { key:'total', title:'الإجمالي', render:v=><span style={{fontWeight:700,color:'#10b981'}}>{fmt(v)} {CUR}</span> },
     { key:'status', title:'الحالة', render:v=><Badge color={STATUS_COLORS[v]||'#64748b'}>{STATUS_LABELS[v]||v}</Badge> },
+    { key:'_id', title:'', render:(_,r)=>can('sales') && <Btn size="sm" variant="danger" onClick={()=>delSale(r)} title="حذف الفاتورة">🗑️</Btn> },
   ];
+  const delSale = async (r) => {
+    if (!confirm(`حذف فاتورة البيع ${r.invoiceNo}؟\nسيتم إرجاع كمياتها إلى المخزون.`)) return;
+    try { const { data } = await api.delete(`/sales/${r._id}`); toast.success(data.message); load(); }
+    catch (e) { toast.error(e.response?.data?.message || 'خطأ'); }
+  };
 
   return (
     <div>
@@ -173,11 +182,7 @@ export function Sales() {
           <div style={{fontSize:12,color:'var(--sub)',marginBottom:8,fontWeight:600}}>المنتجات</div>
           {lines.map((line,i)=>(
             <div key={i} style={{display:'flex',gap:8,marginBottom:8,alignItems:'center'}}>
-              <select value={line.product} onChange={e=>updateLine(i,'product',e.target.value)}
-                style={{flex:2,background:'var(--bg)',border:'1px solid var(--border)',borderRadius:8,padding:'8px 10px',color:'var(--text)',fontSize:13,outline:'none'}}>
-                <option value="">-- المنتج --</option>
-                {products.map(p=><option key={p._id} value={p._id}>{p.name} (مخزون: {p.stock})</option>)}
-              </select>
+              <ProductSelect products={products} value={line.product} onChange={v=>updateLine(i,'product',v)} showStock style={{flex:2}} />
               <input type="number" value={line.qty} onChange={e=>updateLine(i,'qty',e.target.value)} placeholder="الكمية" min="1"
                 style={{width:70,background:'var(--bg)',border:'1px solid var(--border)',borderRadius:8,padding:'8px 10px',color:'var(--text)',fontSize:13,outline:'none'}} />
               <input type="number" value={line.price} onChange={e=>updateLine(i,'price',e.target.value)} placeholder="السعر"

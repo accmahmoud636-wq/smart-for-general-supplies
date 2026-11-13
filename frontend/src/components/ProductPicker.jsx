@@ -60,3 +60,15 @@ export default function ProductPicker({ products = [], onSelect, placeholder = '
     </div>
   );
 }
+
+// خانة اختيار صنف: لو مختار يظهر اسمه وزرار تغيير، ولو فاضي تظهر خانة البحث
+export function ProductSelect({ products = [], value, onChange, showStock, style }) {
+  const p = value && products.find(x => x._id === value);
+  if (p) return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--bg)', border: `1px solid ${C.border}`, borderRadius: 8, padding: '7px 10px', fontSize: 13, minWidth: 0, ...style }}>
+      <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={p.name}>{p.name}{showStock && <span style={{ fontSize: 11, color: C.muted }}> · مخزون {p.stock}</span>}</span>
+      <button type="button" onClick={() => onChange('')} style={{ background: 'none', border: 'none', color: '#a5b4fc', cursor: 'pointer', fontSize: 12, flexShrink: 0 }}>تغيير</button>
+    </div>
+  );
+  return <div style={{ minWidth: 0, ...style }}><ProductPicker products={products} onSelect={(id) => onChange(id)} width="100%" placeholder="اكتب اسم الصنف أو SKU أو الباركود..." /></div>;
+}
