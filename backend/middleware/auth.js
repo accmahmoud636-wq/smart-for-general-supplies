@@ -10,6 +10,7 @@ const auth = async (req, res, next) => {
     const user = await User.findById(decoded.id).select('-password');
     if (!user || !user.active) return res.status(401).json({ message: 'الحساب غير نشط' });
     req.user = user;
+    require('../utils/activity').touch(user);   // آخر ظهور
     next();
   } catch {
     res.status(401).json({ message: 'Token غير صالح' });

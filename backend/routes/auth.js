@@ -19,6 +19,14 @@ const loginOk = async (res, user) => {
   res.json({ token: sign(user._id), user: user.toSafeObject() });
 };
 
+// نبض كل دقيقة من الصفحة المفتوحة (للمتصلين الآن)
+router.post('/ping', require('../middleware/auth').auth, (req, res) => res.json({ ok: true }));
+// الخروج: يتسجل في السجل ويطلع من «المتصلين»
+router.post('/logout', require('../middleware/auth').auth, async (req, res) => {
+  await User.updateOne({ _id: req.user._id }, { $unset: { lastSeen: 1 } });
+  res.json({ ok: true });
+});
+
 // POST /api/auth/login-card — الدخول بمسح كارت الموظف
 router.post('/login-card', async (req, res) => {
   try {

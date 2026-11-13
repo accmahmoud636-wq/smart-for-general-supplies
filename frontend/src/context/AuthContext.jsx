@@ -38,7 +38,17 @@ export function AuthProvider({ children }) {
     return data.user;
   };
 
+  // نبض كل دقيقة طول ما الصفحة مفتوحة (للمتصلين الآن)
+  useEffect(() => {
+    if (!user) return;
+    const ping = () => api.post('/auth/ping').catch(() => {});
+    ping();
+    const t = setInterval(ping, 60 * 1000);
+    return () => clearInterval(t);
+  }, [user?._id]);
+
   const logout = () => {
+    api.post('/auth/logout').catch(() => {});
     sessionStorage.removeItem('erp_token');
     sessionStorage.removeItem('erp_user');
     setUser(null);

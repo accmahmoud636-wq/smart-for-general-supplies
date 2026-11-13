@@ -54,6 +54,7 @@ const userSchema = new mongoose.Schema({
   active:   { type: Boolean, default: true },
   avatar:   { type: String, default: '' },
   lastLogin:{ type: Date },
+  lastSeen: { type: Date },      // آخر نشاط (للمتصلين الآن)
   // صلاحيات مخصصة: لو مفعّلة بتحل محل صلاحيات الدور
   useCustom:         { type: Boolean, default: false },
   customPermissions: { type: [String], default: [] }

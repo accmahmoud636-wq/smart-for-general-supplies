@@ -43,6 +43,7 @@ const SECTIONS = [
     { path: '/settings?tab=users',     icon: '🔐', label: 'المستخدمون والصلاحيات', perm: 'all' },
     { path: '/settings?tab=theme',     icon: '🎨', label: 'المظهر',    perm: 'settings:read' },
     { path: '/settings?tab=assistant', icon: '✨', label: 'المساعد الذكي', perm: 'all' },
+    { path: '/settings?tab=activity',  icon: '🟢', label: 'المتصلون والسجل', perm: 'all' },
   ] },
 ];
 

@@ -13,6 +13,7 @@ const TABS = [
   ['theme', 'المظهر', 'settings:read'],
   ['data', 'إدارة البيانات', 'products'],
   ['assistant', 'المساعد الذكي', 'all'],
+  ['activity', 'المتصلون والسجل', 'all'],
 ];
 const err = (e) => e.response?.data?.message || e.message || 'خطأ';
 
@@ -36,6 +37,7 @@ export default function Settings() {
       {tab === 'theme' && <Theme />}
       {tab === 'data' && <DataTab />}
       {tab === 'assistant' && <AssistantTab />}
+      {tab === 'activity' && <ActivityTab />}
     </div>
   );
 }
@@ -557,5 +559,68 @@ function BackupCard() {
         )}
       </div>
     </Card>
+  );
+}
+
+// ═══ المتصلون الآن + سجل النشاط ═════════════════════════════════
+const ago = (d) => {
+  if (!d) return 'لم يسجّل دخولاً';
+  const m = Math.floor((Date.now() - new Date(d)) / 60000);
+  if (m < 1) return 'الآن';
+  if (m < 60) return `منذ ${m} دقيقة`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `منذ ${h} ساعة`;
+  return `منذ ${Math.floor(h / 24)} يوم`;
+};
+const dt = (d) => new Date(d).toLocaleString('ar-EG', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
+const actColor = (a = '') => a.includes('⚠️') || a.startsWith('حذف') ? '#ef4444' : a.includes('ترحيل') ? '#10b981' : a.includes('دخول') ? '#6366f1' : a.includes('خروج') ? '#64748b' : '#f59e0b';
+
+function ActivityTab() {
+  const [users, setUsers] = useState([]);
+  const [log, setLog] = useState([]);
+  const [sel, setSel] = useState('');
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
+  const loadUsers = () => api.get('/users/online').then(r => setUsers(r.data)).catch(e => toast.error(err(e)));
+  const loadLog = () => api.get('/users/activity', { params: { user: sel || undefined, from: from || undefined, to: to || undefined } }).then(r => setLog(r.data)).catch(() => {});
+  useEffect(() => { loadUsers(); const t = setInterval(loadUsers, 30000); return () => clearInterval(t); }, []);
+  useEffect(() => { loadLog(); const t = setInterval(loadLog, 30000); return () => clearInterval(t); }, [sel, from, to]);
+  const online = users.filter(u => u.online).length;
+  const inp = { background: 'var(--bg)', border: `1px solid ${C.border}`, borderRadius: 8, padding: '7px 10px', color: C.text, fontSize: 13, outline: 'none' };
+
+  return (
+    <div>
+      <div style={{ fontWeight: 800, marginBottom: 10 }}>المستخدمون <span style={{ fontSize: 13, color: '#10b981' }}>· {online} أونلاين الآن</span></div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(230px,1fr))', gap: 10, marginBottom: 18 }}>
+        {users.map(u => (
+          <div key={u._id} onClick={() => setSel(sel === u._id ? '' : u._id)} style={{ cursor: 'pointer', background: C.card, border: `1px solid ${sel === u._id ? '#6366f1' : C.border}`, borderRadius: 12, padding: 12, opacity: u.active ? 1 : 0.5 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ width: 10, height: 10, borderRadius: 5, background: u.online ? '#10b981' : '#64748b', boxShadow: u.online ? '0 0 8px #10b981' : 'none', flexShrink: 0 }} />
+              <b style={{ flex: 1, fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u.name}</b>
+              <span style={{ fontSize: 11, color: u.online ? '#10b981' : C.muted, fontWeight: 700 }}>{u.online ? 'أونلاين' : ago(u.lastSeen || u.lastLogin)}</span>
+            </div>
+            <div style={{ fontSize: 11, color: C.muted, marginTop: 6 }}>{u.lastAction ? <>آخر عملية: <span style={{ color: C.sub }}>{u.lastAction.action}</span> · {ago(u.lastAction.at)}</> : 'لا يوجد نشاط مسجّل'}</div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 10 }}>
+        <b style={{ flex: 1 }}>سجل النشاط {sel && <span style={{ fontSize: 13, color: '#a5b4fc' }}>— {users.find(u => u._id === sel)?.name} <button onClick={() => setSel('')} style={{ background: 'none', border: 'none', color: '#f87171', cursor: 'pointer' }}>✕</button></span>}</b>
+        <span style={{ fontSize: 12, color: C.muted }}>من</span><input type="date" value={from} onChange={e => setFrom(e.target.value)} style={inp} />
+        <span style={{ fontSize: 12, color: C.muted }}>إلى</span><input type="date" value={to} onChange={e => setTo(e.target.value)} style={inp} />
+      </div>
+      <Card style={{ padding: 0 }}>
+        {!log.length && <div style={{ padding: 20, textAlign: 'center', color: C.muted, fontSize: 13 }}>لا يوجد نشاط مسجّل</div>}
+        {log.map(a => (
+          <div key={a._id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '9px 14px', borderBottom: `1px solid ${C.border}44`, fontSize: 13, flexWrap: 'wrap' }}>
+            <span style={{ width: 120, color: C.muted, fontSize: 12, flexShrink: 0 }}>{dt(a.at)}</span>
+            <b style={{ width: 130, flexShrink: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.name}</b>
+            <span style={{ color: actColor(a.action), fontWeight: 700 }}>{a.action}</span>
+            {a.ref && <span style={{ color: C.sub, fontFamily: 'monospace', fontSize: 12 }}>{a.ref}</span>}
+          </div>
+        ))}
+      </Card>
+      <div style={{ fontSize: 11, color: C.muted, marginTop: 8 }}>يُحتفظ بالسجل 90 يوماً. «أونلاين» = المنصة مفتوحة عنده خلال آخر دقيقتين.</div>
+    </div>
   );
 }

@@ -10,6 +10,7 @@ app.use(cors({ origin: process.env.CLIENT_URL || '*', credentials: true }));
 const jsonSmall = express.json({ limit: '25mb' }), jsonBig = express.json({ limit: '150mb' });
 app.use((req, res, next) => (req.path === '/api/admin/restore' ? jsonBig : jsonSmall)(req, res, next));
 
+app.use(require('./utils/activity').activityLogger);   // سجل النشاط
 app.use('/api/auth',       require('./routes/auth'));
 app.use('/api/users',      require('./routes/users'));
 

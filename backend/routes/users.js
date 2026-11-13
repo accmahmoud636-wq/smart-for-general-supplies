@@ -8,6 +8,33 @@ const cleanPerms = (list) => {
   return [...new Set((list || []).filter(x => ok.has(x)))];
 };
 
+// ─── المتصلين الآن + السجل (مدير النظام) ───────────────────────
+router.get('/online', auth, permit('all'), async (req, res) => {
+  const { ONLINE_MS, prune } = require('../utils/activity');
+  prune();
+  const Activity = require('../models/activity');
+  const users = await User.find().select('name email role active lastSeen lastLogin').lean();
+  const lastAct = await Activity.find({ at: { $gte: new Date(Date.now() - 30 * 864e5) } }).sort('-at').limit(2000).select('user action at').lean();
+  const now = Date.now();
+  res.json(users.map(u => {
+    const a = lastAct.find(x => String(x.user) === String(u._id));
+    return { _id: u._id, name: u.name, email: u.email, role: u.role, active: u.active, lastLogin: u.lastLogin, lastSeen: u.lastSeen,
+      online: !!u.lastSeen && now - new Date(u.lastSeen) < ONLINE_MS, lastAction: a ? { action: a.action, at: a.at } : null };
+  }).sort((a, b) => (b.online - a.online) || (new Date(b.lastSeen || 0) - new Date(a.lastSeen || 0))));
+});
+
+router.get('/activity', auth, permit('all'), async (req, res) => {
+  const Activity = require('../models/activity');
+  const q = {};
+  if (req.query.user) q.user = req.query.user;
+  if (req.query.from || req.query.to) {
+    q.at = {};
+    if (req.query.from) q.at.$gte = new Date(req.query.from);
+    if (req.query.to) { const t = new Date(req.query.to); t.setHours(23, 59, 59, 999); q.at.$lte = t; }
+  }
+  res.json(await Activity.find(q).sort('-at').limit(Math.min(1000, +req.query.limit || 300)).lean());
+});
+
 // GET all users (admin+)
 router.get('/', auth, permit('all'), async (req, res) => {
   try {
