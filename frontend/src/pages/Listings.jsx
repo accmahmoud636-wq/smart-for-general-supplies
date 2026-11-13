@@ -11,6 +11,31 @@ const CUR = THEME.currency || 'ج.م';
 const FOCUS = ['restock', 'loss', 'returns', 'unmapped', 'declining', 'dead', 'no_listing'];
 const ICONS = { restock: '📦', loss: '💸', returns: '↩️', unmapped: '🔗', declining: '📉', dead: '💤', no_listing: '➕', star: '⭐', growing: '📈', ok: '✔️' };
 
+// تفصيل مالي: المبيعات ← الرسوم ← صافي أمازون ← التكلفة ← الربح
+function FinLines({ f, compact }) {
+  const L = [
+    ['المبيعات', f.sales, '#e2e8f0', true],
+    ['المرتجعات (المبالغ المستردة)', f.refunds],
+    ['رسوم الشحن المحصّلة', f.ship],
+    ['الخصومات والعروض', f.promo],
+    ['عمولة البيع (Selling fees)', f.selling],
+    ['رسوم الشحن والتنفيذ (FBA / Easy Ship)', f.fba],
+    ['رسوم معاملات أخرى', f.otherFees],
+    ['أخرى', f.other],
+    ...(f.general !== undefined ? [['رسوم عامة (اشتراك، شحن، إلغاء...)', f.general]] : []),
+  ].filter(([, v, , keep]) => keep || v);
+  const row = (l, v, c, b) => (
+    <div key={l} style={{ display: 'flex', justifyContent: 'space-between', gap: 16, padding: compact ? '3px 0' : '5px 0', fontSize: compact ? 12 : 13, borderTop: b ? `1px dashed ${C.border}` : 'none', fontWeight: b ? 800 : 400 }}>
+      <span style={{ color: b ? C.text : C.sub }}>{l}</span><span style={{ color: c || (v < 0 ? '#f87171' : v > 0 ? '#10b981' : C.muted), direction: 'ltr' }}>{fmt(v)}</span>
+    </div>);
+  return (<div>
+    {L.map(([l, v, c]) => row(l, v, c))}
+    {row('صافي المحوّل من أمازون', f.net, '#a5b4fc', true)}
+    {row('تكلفة البضاعة المباعة', -f.cogs)}
+    {row('صافي الربح', f.profit, f.profit < 0 ? '#f87171' : '#10b981', true)}
+  </div>);
+}
+
 export default function Listings() {
   const nav = useNavigate();
   const [days, setDays] = useState(30);
@@ -19,6 +44,7 @@ export default function Listings() {
   const [q, setQ] = useState('');
   const [busy, setBusy] = useState(false);
   const [last, setLast] = useState(null);
+  const [det, setDet] = useState(null);
 
   const load = () => api.get('/amazon/listings', { params: { days } }).then(r => setD(r.data)).catch(e => toast.error(e.response?.data?.message || 'خطأ'));
   useEffect(() => { setD(null); load(); }, [days]);
@@ -65,7 +91,8 @@ export default function Listings() {
         {r.trend !== null && r.trend !== 0 && r.trend !== undefined && <span style={{ fontSize: 11, marginRight: 6, color: r.trend > 0 ? '#10b981' : '#f87171' }}>{r.trend > 0 ? '▲' : '▼'} {Math.abs(r.trend)}%</span>}
       </div>) },
     { key: 'revenue', title: 'الإيراد', render: v => v ? fmt(v) : '—' },
-    { key: 'profit', title: 'صافي الربح', render: (v, r) => v === null || v === undefined ? <span style={{ color: C.muted }}>—</span> : <span style={{ color: v < 0 ? '#f87171' : '#10b981', fontWeight: 700 }}>{fmt(v)}{r.margin !== null && <span style={{ fontSize: 11, color: C.muted, fontWeight: 400 }}> ({r.margin}%)</span>}</span> },
+    { key: 'fin', title: 'رسوم أمازون', render: f => f ? <span style={{ color: '#f87171', direction: 'ltr', display: 'inline-block' }}>{fmt(f.fees)}</span> : '—' },
+    { key: 'profit', title: 'صافي الربح', render: (v, r) => v === null || v === undefined ? <span style={{ color: C.muted }}>—</span> : <span onClick={() => setDet(r)} title="اضغط للتفاصيل" style={{ cursor: 'pointer', color: v < 0 ? '#f87171' : '#10b981', fontWeight: 700, borderBottom: '1px dotted' }}>{fmt(v)}{r.margin !== null && <span style={{ fontSize: 11, color: C.muted, fontWeight: 400 }}> ({r.margin}%)</span>}</span> },
     { key: 'returnRate', title: 'المرتجع', render: v => v ? <span style={{ color: v >= 15 ? '#f97316' : C.sub }}>{v}%</span> : '—' },
     { key: 'product', title: 'الرصيد', render: (p, r) => p ? (
       <div style={{ whiteSpace: 'nowrap' }}>
@@ -84,11 +111,11 @@ export default function Listings() {
     <div>
       <PageHeader title="الإعلانات" icon="📣" actions={[
         <label key="u" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', color: '#fff', borderRadius: 8, padding: '8px 14px', fontWeight: 700, cursor: busy ? 'wait' : 'pointer', fontSize: 13 }}>
-          {busy ? '⏳ جارٍ الرفع...' : '⬆ رفع تقرير الطلبات'}
+          {busy ? '⏳ جارٍ الرفع...' : '⬆ رفع تقرير (معاملات أو طلبات)'}
           <input type="file" accept=".txt,.csv,.tsv,.xlsx,.xls" style={{ display: 'none' }} disabled={busy} onChange={e => { upload(e.target.files[0]); e.target.value = ''; }} />
         </label>,
         <div key="d" style={{ display: 'flex', gap: 4 }}>
-          {[7, 30, 60, 90].map(n => <button key={n} onClick={() => setDays(n)} style={{ padding: '6px 12px', borderRadius: 8, cursor: 'pointer', fontSize: 13, fontWeight: 700, background: days === n ? '#6366f133' : 'transparent', border: `1px solid ${days === n ? '#6366f1' : C.border}`, color: days === n ? '#a5b4fc' : C.sub }}>{n} يوم</button>)}
+          {[7, 30, 90, 180, 365].map(n => <button key={n} onClick={() => setDays(n)} style={{ padding: '6px 12px', borderRadius: 8, cursor: 'pointer', fontSize: 13, fontWeight: 700, background: days === n ? '#6366f133' : 'transparent', border: `1px solid ${days === n ? '#6366f1' : C.border}`, color: days === n ? '#a5b4fc' : C.sub }}>{n} يوم</button>)}
         </div>
       ]} />
 
@@ -97,10 +124,10 @@ export default function Listings() {
           ✅ آخر رفع: <b>{last.name}</b> (تقرير {last.kind}) — {last.message}. الطلبات المكررة بتتحدّث ومابتتكررش.
         </Card>
       )}
-      {!K.hasOrders && (
+      {!K.hasOrders && !K.hasTx && (
         <Card style={{ marginBottom: 14, borderColor: '#f59e0b66', fontSize: 13, color: C.sub, lineHeight: 1.9 }}>
-          لا توجد طلبات أمازون في هذه الفترة. ارفع <b>تقرير كل الطلبات</b> من زر «رفع تقرير الطلبات» أعلاه
-          (Seller Central ← Reports ← Fulfillment ← All Orders، آخر 30 يوماً). الربح والمرتجعات تأتي من <b>تقرير المعاملات</b> المرفوع مع مطابقة الشحنات.
+          لا توجد بيانات أمازون في هذه الفترة. ارفع <b>تقرير المعاملات</b> (Payments ← Reports Repository ← Transaction) أو <b>تقرير كل الطلبات</b> من زر الرفع أعلاه.
+          تقرير المعاملات لوحده كفاية: منه المبيعات والربح والمرتجعات.
         </Card>
       )}
 
@@ -112,6 +139,43 @@ export default function Listings() {
         <StatCard label="أصناف بدون إعلان" value={K.counts.no_listing} icon="➕" color="#8b5cf6" />
         <StatCard label="الأعلى مبيعاً ⭐" value={K.stars} icon="⭐" color="#10b981" sub="أعلى 10% من الإعلانات اللي باعت" />
       </div>
+
+      {/* الملخص المالي */}
+      {d.fin && K.hasTx && (() => { const F = d.fin; return (
+        <Card style={{ marginBottom: 16 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
+            <b>💰 الأرباح ورسوم أمازون — آخر {days} يوم</b>
+            <span style={{ fontSize: 12, color: C.muted }}>{F.orders} سطر مبيعات · {F.refundCount} مرتجع{F.transfers ? ` · اتحوّل لحسابك ${fmt(F.transfers)} ${CUR}` : ''}</span>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(150px,1fr))', gap: 10, marginBottom: 12 }}>
+            {[['المبيعات', F.sales, '#6366f1'], ['رسوم أمازون', F.fees + F.general, '#ef4444', F.sales ? `${Math.round(-(F.fees + F.general) / F.sales * 100)}% من المبيعات` : ''], ['المرتجعات', F.refunds, '#f97316'], ['صافي من أمازون', F.net, '#8b5cf6'], ['تكلفة البضاعة', -F.cogs, '#64748b'], ['صافي الربح', F.profit, F.profit < 0 ? '#ef4444' : '#10b981', F.sales ? `هامش ${Math.round(F.profit / F.sales * 100)}%` : '']].map(([l, v, c, sub]) => (
+              <div key={l} style={{ background: 'var(--bg)', border: `1px solid ${C.border}`, borderRadius: 10, padding: '10px 12px' }}>
+                <div style={{ fontSize: 11, color: C.muted }}>{l}</div>
+                <div style={{ fontWeight: 800, fontSize: 17, color: c, direction: 'ltr', textAlign: 'right' }}>{fmt(v)}</div>
+                {sub && <div style={{ fontSize: 11, color: C.muted }}>{sub}</div>}
+              </div>))}
+          </div>
+          <details>
+            <summary style={{ cursor: 'pointer', fontSize: 13, color: '#a5b4fc' }}>التفاصيل الكاملة</summary>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(280px,1fr))', gap: 20, marginTop: 10 }}>
+              <FinLines f={F} />
+              {F.generalByType.length > 0 && <div><div style={{ fontSize: 12, color: C.muted, marginBottom: 4 }}>الرسوم العامة (مش على إعلان معيّن)</div>
+                {F.generalByType.map(g => <div key={g.name} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, padding: '3px 0' }}><span style={{ color: C.sub }}>{g.name}</span><span style={{ color: '#f87171', direction: 'ltr' }}>{fmt(g.total)}</span></div>)}</div>}
+            </div>
+          </details>
+          {F.missingCost > 0 && <div style={{ fontSize: 12, color: '#f59e0b', marginTop: 8 }}>⚠ {F.missingCost} إعلان باع وصنفه مالوش سعر شراء — الربح بتاعه محسوب من غير تكلفة. حدّث الأسعار من الرصيد الافتتاحي.</div>}
+        </Card>); })()}
+
+      {det && (
+        <div onClick={() => setDet(null)} style={{ position: 'fixed', inset: 0, background: '#0008', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 18, width: 420, maxWidth: '100%' }}>
+            <div style={{ fontWeight: 800, marginBottom: 2 }}>{det.product?.name || det.name}</div>
+            <div style={{ fontSize: 11, color: C.muted, fontFamily: 'monospace', marginBottom: 10 }}>{det.sku} · باع {det.units} · مرتجع {det.refunded} · آخر {days} يوم</div>
+            <FinLines f={det.fin} />
+            <button onClick={() => setDet(null)} style={{ marginTop: 12, width: '100%', padding: 8, borderRadius: 8, border: `1px solid ${C.border}`, background: 'transparent', color: C.sub, cursor: 'pointer' }}>إغلاق</button>
+          </div>
+        </div>
+      )}
 
       {/* مركز الإجراءات */}
       <Card style={{ marginBottom: 16 }}>

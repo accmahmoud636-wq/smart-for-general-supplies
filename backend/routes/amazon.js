@@ -217,6 +217,8 @@ async function importOrders(rows) {
   {
     const found = mapHeaders(rows, ORDER_ALIASES, ['orderId', 'sku']);
     if (!found) return null;
+    // تقرير المعاملات فيه برضه «order id» و«sku» — لو فيه نوع + إجمالي ومافيهوش تاريخ شراء يبقى معاملات مش طلبات
+    if (found.idx.purchaseDate === undefined && mapHeaders(rows, TX_ALIASES, ['type', 'total'])) return null;
     const { headerRow, idx } = found;
     const get = (r, f) => idx[f] !== undefined ? r[idx[f]] : '';
     const { resolve, mult, parts, kitCost } = await buildResolver();
@@ -331,13 +333,28 @@ async function importTransactions(rows) {
       const hash = txHash(base, seen[base]);
       // الحالة وتاريخ التحرير بيتحدّثوا لو الملف أحدث
       const live = { status: String(get(r, 'status') || '').trim(), releaseDate: parseDate(get(r, 'releaseDate')) || undefined };
-      ops.push({ updateOne: { filter: { hash }, update: { $setOnInsert: { hash, ...doc }, $set: live }, upsert: true } });
+      ops.push({ hash, doc, live });
+    }
+    // تنظيف: طلبات اتسجلت غلط من ملف معاملات قبل كده (من غير تاريخ شراء ولا حالة ولا فاتورة)
+    await AmazonOrder.deleteMany({ purchaseDate: null, amazonStatus: '', manual: { $ne: true }, sale: null }).catch(() => {});
+    // قراءة واحدة للموجود ← إدخال الجديد دفعة واحدة ← تحديث الحالة بس للي اتغيّر (Deferred → Released)
+    const have = new Map();
+    const hashes = ops.map(o => o.hash);
+    for (let i = 0; i < hashes.length; i += 1000) {
+      for (const t of await AmazonTransaction.find({ hash: { $in: hashes.slice(i, i + 1000) } }).select('hash status releaseDate').lean()) have.set(t.hash, t);
+    }
+    const toInsert = [], toUpdate = [];
+    for (const o of ops) {
+      const ex = have.get(o.hash);
+      if (!ex) { toInsert.push({ hash: o.hash, ...o.doc, ...o.live }); continue; }
+      if ((ex.status || '') !== o.live.status || +new Date(ex.releaseDate || 0) !== +new Date(o.live.releaseDate || 0)) toUpdate.push({ updateOne: { filter: { _id: ex._id }, update: { $set: o.live } } });
     }
     let inserted = 0;
-    for (let i = 0; i < ops.length; i += 500) {
-      const out = await AmazonTransaction.bulkWrite(ops.slice(i, i + 500), { ordered: false });
-      inserted += out.upsertedCount || 0;
+    for (let i = 0; i < toInsert.length; i += 1000) {
+      try { inserted += (await AmazonTransaction.insertMany(toInsert.slice(i, i + 1000), { ordered: false })).length; }
+      catch (e) { inserted += e.insertedDocs?.length ?? e.result?.insertedCount ?? 0; if (e.code !== 11000 && !e.writeErrors) throw e; }
     }
+    for (let i = 0; i < toUpdate.length; i += 500) await AmazonTransaction.bulkWrite(toUpdate.slice(i, i + 500), { ordered: false });
     return { message: `تم: ${inserted} معاملة جديدة، ${ops.length - inserted} موجودة مسبقاً`, inserted, duplicates: ops.length - inserted };
   }
 }
@@ -652,18 +669,21 @@ router.get('/listings', auth, permit('amazon', 'amazon:read'), async (req, res) 
     const { resolve, mult, parts, kitCost, products } = await buildResolver();
     const [orders, txs, maps] = await Promise.all([
       AmazonOrder.find({ purchaseDate: { $gte: prevSince } }).select('sku asin productName qty itemPrice purchaseDate stage').lean(),
-      AmazonTransaction.find({ date: { $gte: since }, sku: { $ne: '' } }).lean(),
+      AmazonTransaction.find({ date: { $gte: prevSince }, sku: { $ne: '' } }).lean(),
       AmazonSkuMap.find().lean(),
     ]);
     const lastSale = {};
     for (const o of await AmazonOrder.find({ stage: { $ne: 'cancelled' } }).select('sku purchaseDate').lean()) {
       const k = o.sku.toLowerCase(); if (o.purchaseDate && (!lastSale[k] || o.purchaseDate > lastSale[k])) lastSale[k] = o.purchaseDate;
     }
+    for (const t of await AmazonTransaction.find({ kind: 'order', sku: { $ne: '' } }).select('sku date').lean()) {
+      const k = t.sku.toLowerCase(); if (t.date && (!lastSale[k] || t.date > lastSale[k])) lastSale[k] = t.date;
+    }
     // كل الإعلانات المعروفة: SKU أساسي للصنف + المربوطة + اللي ظهرت في التقارير
     const L = new Map();
     const get = (sku, name = '', asin = '') => {
       const k = String(sku).trim(); const key = k.toLowerCase();
-      if (!L.has(key)) L.set(key, { sku: k, name, asin, units: 0, prevUnits: 0, revenue: 0, sold: 0, refunded: 0, net: 0, hasTx: false });
+      if (!L.has(key)) L.set(key, { sku: k, name, asin, units: 0, prevUnits: 0, revenue: 0, sold: 0, refunded: 0, net: 0, hasTx: false, f: { sales: 0, refunds: 0, ship: 0, promo: 0, selling: 0, fba: 0, otherFees: 0, other: 0 } });
       const x = L.get(key); if (!x.name && name) x.name = name; if (!x.asin && asin) x.asin = asin;
       return x;
     };
@@ -672,12 +692,23 @@ router.get('/listings', auth, permit('amazon', 'amazon:read'), async (req, res) 
     for (const o of orders) {
       if (o.stage === 'cancelled') continue;
       const x = get(o.sku, o.productName, o.asin);
+      x.hasOrders = true;
       if (o.purchaseDate >= since) { x.units += o.qty; x.revenue += o.itemPrice; } else x.prevUnits += o.qty;
     }
+    // تقرير المعاملات لوحده كفاية: لو الإعلان مالوش طلبات مرفوعة، المبيعات بتتحسب من سطور «Order» في المعاملات
     for (const t of txs) {
-      const x = get(t.sku, t.description); x.hasTx = true; x.net += t.total;
+      const x = get(t.sku, t.description);
+      if (t.kind === 'order') {
+        if (t.date >= since) { x.txUnits = (x.txUnits || 0) + t.qty; x.txRevenue = (x.txRevenue || 0) + t.productSales; } else x.txPrev = (x.txPrev || 0) + t.qty;
+      }
+      if (t.date < since) continue;
+      x.hasTx = true; x.net += t.total;
+      const f = x.f;
+      if (t.kind === 'refund') f.refunds += t.productSales; else f.sales += t.productSales;
+      f.ship += t.shippingCredits; f.promo += t.promoRebates; f.selling += t.sellingFees; f.fba += t.fulfillmentFees; f.otherFees += t.otherFees; f.other += t.other;
       if (t.kind === 'order') x.sold += t.qty; else if (t.kind === 'refund') x.refunded += Math.abs(t.qty);
     }
+    for (const x of L.values()) if (!x.hasOrders && (x.txUnits || x.txPrev)) { x.units = x.txUnits || 0; x.revenue = x.txRevenue || 0; x.prevUnits = x.txPrev || 0; }
 
     // مبيعات كل صنف من كل إعلاناته (المخزون مشترك بين إعلانات الصنف)
     const prodUnits = {}, prodListings = {};
@@ -704,6 +735,7 @@ router.get('/listings', auth, permit('amazon', 'amazon:read'), async (req, res) 
       const neckName = kit.length > 1 && neck ? ` (${neck.p.name})` : '';
       const cogs = p ? (r.sold - r.refunded) * kitCost(r.sku, r.asin) : 0;
       const profit = r.hasTx ? r2(r.net - cogs) : null;
+      const fin = r.hasTx ? { ...Object.fromEntries(Object.entries(r.f).map(([k, v]) => [k, r2(v)])), net: r2(r.net), cogs: r2(cogs), profit, fees: r2(r.f.selling + r.f.fba + r.f.otherFees) } : null;
       const returnRate = r.sold ? r2(r.refunded / r.sold * 100) : 0;
       const trend = r.prevUnits ? Math.round((r.units - r.prevUnits) / r.prevUnits * 100) : (r.units ? null : 0);
       const last = lastSale[r.sku.toLowerCase()] || null;
@@ -723,7 +755,7 @@ router.get('/listings', auth, permit('amazon', 'amazon:read'), async (req, res) 
       else if (r.prevUnits >= 2 && r.units >= r.prevUnits * 1.5) { action = 'growing'; why = `باع ${r.units} مقابل ${r.prevUnits} — الطلب بيزيد، تابع المخزون`; }
       return {
         sku: r.sku, asin: r.asin, name: r.name || p?.name || '', units: r.units, prevUnits: r.prevUnits, trend, revenue: r2(r.revenue),
-        profit, margin: profit !== null && r.revenue ? r2(profit / r.revenue * 100) : null, returnRate, refunded: r.refunded,
+        profit, margin: profit !== null && r.revenue ? r2(profit / r.revenue * 100) : null, returnRate, refunded: r.refunded, fin,
         lastSale: last, product: p ? { _id: p._id, name: p.name, stock: p.stock, listings: (prodListings[p._id] || []).length } : null,
         daysLeft, suggestedQty, action, why, packQty, parts: kit.length > 1 || packQty > 1 ? kit.map(k => `${k.p.name} ×${k.qty}`) : null, isStar: r.units > 0 && r.units >= topCut,
       };
@@ -736,13 +768,30 @@ router.get('/listings', auth, permit('amazon', 'amazon:read'), async (req, res) 
 
     const all = [...out, ...noListing].sort((a, b) => LISTING_ACTIONS[a.action].order - LISTING_ACTIONS[b.action].order || b.units - a.units);
     const count = (a) => all.filter(r => r.action === a).length;
+    // الملخص المالي للفترة: كل سطور المعاملات (بالـ SKU + الرسوم العامة زي الاشتراك والشحن)
+    const F = { sales: 0, refunds: 0, ship: 0, promo: 0, selling: 0, fba: 0, otherFees: 0, other: 0, general: 0, transfers: 0, net: 0, cogs: 0, orders: 0, refundCount: 0 };
+    const generalByType = {};
+    for (const t of txs) if (t.date >= since) {
+      if (t.kind === 'order') F.orders++; if (t.kind === 'refund') F.refundCount++;
+      if (t.kind === 'refund') F.refunds += t.productSales; else F.sales += t.productSales;
+      F.ship += t.shippingCredits; F.promo += t.promoRebates; F.selling += t.sellingFees; F.fba += t.fulfillmentFees; F.otherFees += t.otherFees; F.other += t.other; F.net += t.total;
+    }
+    for (const t of await AmazonTransaction.find({ date: { $gte: since }, sku: '' }).select('type kind description total').lean()) {
+      if (t.kind === 'transfer') { F.transfers += -t.total; continue; }
+      F.general += t.total; F.net += t.total;
+      const k = t.description || t.type; generalByType[k] = (generalByType[k] || 0) + t.total;
+    }
+    F.cogs = out.reduce((t, r) => t + (r.fin?.cogs || 0), 0);
+    const fin = { ...Object.fromEntries(Object.entries(F).map(([k, v]) => [k, r2(v)])), profit: r2(F.net - F.cogs), fees: r2(F.selling + F.fba + F.otherFees),
+      general: r2(F.general), generalByType: Object.entries(generalByType).map(([k, v]) => ({ name: k, total: r2(v) })).filter(g => g.total).sort((a, b) => a.total - b.total),
+      missingCost: out.filter(r => r.fin && r.product && !kitCost(r.sku, r.asin) && r.units).length };
     const deadValue = r2(products.filter(p => p.stock > 0 && !prodUnits[p._id]).reduce((t, p) => t + p.stock * (p.buyPrice || 0), 0));
     res.json({
-      days, rows: all, actions: LISTING_ACTIONS,
+      days, rows: all, actions: LISTING_ACTIONS, fin,
       kpi: {
         listings: out.length, active: out.filter(r => r.units > 0).length, units: out.reduce((t, r) => t + r.units, 0),
         revenue: r2(out.reduce((t, r) => t + r.revenue, 0)), counts: Object.fromEntries(Object.keys(LISTING_ACTIONS).map(k => [k, count(k)])),
-        deadValue, hasOrders: orders.length > 0, hasTx: txs.length > 0, stars: out.filter(r => r.isStar).length,
+        deadValue, hasOrders: orders.length > 0, hasTx: txs.some(t => t.date >= since), stars: out.filter(r => r.isStar).length,
       },
     });
   } catch (e) { res.status(500).json({ message: e.message }); }
