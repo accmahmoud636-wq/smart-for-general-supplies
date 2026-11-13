@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../utils/api';
 import { Card, Badge, PageHeader, StatCard, Table, fmt, fmtDate, THEME, C_THEME as C } from '../components/UI';
@@ -9,6 +9,12 @@ import { readReportFile } from '../utils/parseReport';
 const CUR = THEME.currency || 'ج.م';
 // الإجراءات اللي محتاجة تتعمل — بالترتيب حسب الأهمية
 const FOCUS = ['restock', 'loss', 'returns', 'unmapped', 'declining', 'dead', 'no_listing'];
+// فلاتر الكروت اللي فوق (غير الإجراءات)
+const CARD_FILTERS = {
+  sold:    { label: 'إعلانات باعت', color: '#6366f1', icon: '📣', test: r => r.units > 0 },
+  lossret: { label: 'بتخسر أو مرتجعها عالي', color: '#f97316', icon: '💸', test: r => r.action === 'loss' || r.action === 'returns' },
+  stars:   { label: 'الأعلى مبيعاً', color: '#10b981', icon: '⭐', test: r => r.isStar },
+};
 const ICONS = { restock: '📦', loss: '💸', returns: '↩️', unmapped: '🔗', declining: '📉', dead: '💤', no_listing: '➕', star: '⭐', growing: '📈', ok: '✔️' };
 
 // تفصيل مالي: المبيعات ← الرسوم ← صافي أمازون ← التكلفة ← الربح
@@ -45,6 +51,8 @@ export default function Listings() {
   const [busy, setBusy] = useState(false);
   const [last, setLast] = useState(null);
   const [det, setDet] = useState(null);
+  const tableRef = useRef();
+  const pick = (f) => { setFilter(cur => cur === f ? 'focus' : f); setTimeout(() => tableRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50); };
 
   const load = () => api.get('/amazon/listings', { params: { days } }).then(r => setD(r.data)).catch(e => toast.error(e.response?.data?.message || 'خطأ'));
   useEffect(() => { setD(null); load(); }, [days]);
@@ -71,8 +79,11 @@ export default function Listings() {
   const rows = useMemo(() => {
     if (!d) return [];
     const words = normAr(q).split(' ').filter(Boolean);
-    return d.rows.filter(r => (filter === 'all' ? true : filter === 'focus' ? FOCUS.includes(r.action) : r.action === filter)
+    const cf = CARD_FILTERS[filter];
+    const out = d.rows.filter(r => (filter === 'all' ? true : filter === 'focus' ? FOCUS.includes(r.action) : cf ? cf.test(r) : r.action === filter)
       && (!words.length || words.every(w => normAr(`${r.name} ${r.sku} ${r.product?.name || ''}`).includes(w))));
+    // الأعلى مبيعاً واللي باعت: مترتبين من الأكتر للأقل
+    return ['sold', 'stars'].includes(filter) ? out.sort((a, b) => b.units - a.units) : out;
   }, [d, filter, q]);
 
   if (!d) return <div style={{ textAlign: 'center', padding: 40, color: C.muted }}>⏳</div>;
@@ -132,12 +143,12 @@ export default function Listings() {
       )}
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(170px,1fr))', gap: 12, marginBottom: 16 }}>
-        <StatCard label="إعلانات باعت" value={K.active}  icon="📣" color="#6366f1" sub={`من ${K.listings.toLocaleString('en')} إعلان · ${K.units} وحدة · ${fmt(K.revenue)} ${CUR}`} />
-        <StatCard label="محتاجة كمية" value={K.counts.restock} icon="📦" color="#ef4444" />
-        <StatCard label="بتخسر أو مرتجعها عالي" value={K.counts.loss + K.counts.returns} icon="💸" color="#f97316" />
-        <StatCard label="إعلانات راكدة" value={K.counts.dead} icon="💤" color="#64748b" sub={K.deadValue ? `رأس مال راكد ${fmt(K.deadValue)}` : ''} />
-        <StatCard label="أصناف بدون إعلان" value={K.counts.no_listing} icon="➕" color="#8b5cf6" />
-        <StatCard label="الأعلى مبيعاً ⭐" value={K.stars} icon="⭐" color="#10b981" sub="أعلى 10% من الإعلانات اللي باعت" />
+        <StatCard onClick={() => pick('sold')} active={filter === 'sold'} label="إعلانات باعت" value={K.active}  icon="📣" color="#6366f1" sub={`من ${K.listings.toLocaleString('en')} إعلان · ${K.units} وحدة · ${fmt(K.revenue)} ${CUR}`} />
+        <StatCard onClick={() => pick('restock')} active={filter === 'restock'} label="محتاجة كمية" value={K.counts.restock} icon="📦" color="#ef4444" />
+        <StatCard onClick={() => pick('lossret')} active={filter === 'lossret'} label="بتخسر أو مرتجعها عالي" value={K.counts.loss + K.counts.returns} icon="💸" color="#f97316" />
+        <StatCard onClick={() => pick('dead')} active={filter === 'dead'} label="إعلانات راكدة" value={K.counts.dead} icon="💤" color="#64748b" sub={K.deadValue ? `رأس مال راكد ${fmt(K.deadValue)}` : ''} />
+        <StatCard onClick={() => pick('no_listing')} active={filter === 'no_listing'} label="أصناف بدون إعلان" value={K.counts.no_listing} icon="➕" color="#8b5cf6" />
+        <StatCard onClick={() => pick('stars')} active={filter === 'stars'} label="الأعلى مبيعاً ⭐" value={K.stars} icon="⭐" color="#10b981" sub="أعلى 10% من الإعلانات اللي باعت" />
       </div>
 
       {/* الملخص المالي */}
@@ -194,11 +205,11 @@ export default function Listings() {
         {(K.counts.unmapped > 0) && <div style={{ marginTop: 10, fontSize: 12, color: C.sub }}>الإعلانات غير المربوطة تُربط من <span onClick={() => nav('/amazon?tab=skus')} style={{ color: '#a5b4fc', cursor: 'pointer', textDecoration: 'underline' }}>ربط رموز SKU</span>.</div>}
       </Card>
 
-      <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+      <div ref={tableRef} style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap', alignItems: 'center', scrollMarginTop: 70 }}>
         {[['focus', `المطلوب (${focusCount})`], ['all', `الكل (${d.rows.length})`]].map(([k, l]) => (
           <button key={k} onClick={() => setFilter(k)} style={{ background: filter === k ? '#6366f133' : 'transparent', border: `1px solid ${filter === k ? '#6366f1' : C.border}`, color: filter === k ? '#a5b4fc' : C.sub, borderRadius: 20, padding: '5px 14px', fontSize: 12, cursor: 'pointer', fontWeight: 600 }}>{l}</button>
         ))}
-        {!['focus', 'all'].includes(filter) && <Badge color={A[filter].color}>{ICONS[filter]} {A[filter].label} — {rows.length}</Badge>}
+        {!['focus', 'all'].includes(filter) && (() => { const x = CARD_FILTERS[filter] || { ...A[filter], icon: ICONS[filter] }; return <Badge color={x.color}>{x.icon} {x.label} — {rows.length} <span onClick={() => setFilter('focus')} style={{ cursor: 'pointer', marginRight: 6 }}>✕</span></Badge>; })()}
         <input value={q} onChange={e => setQ(e.target.value)} placeholder="بحث بالاسم أو SKU..." style={{ marginRight: 'auto', minWidth: 220, background: 'var(--bg)', border: `1px solid ${C.border}`, borderRadius: 8, padding: '8px 12px', color: C.text, fontSize: 13, outline: 'none' }} />
       </div>
       <Card style={{ padding: 0 }}>

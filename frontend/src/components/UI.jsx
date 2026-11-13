@@ -134,9 +134,9 @@ export function Table({ columns, data, onRow }) {
   );
 }
 
-export function StatCard({ label, value, icon, color = '#6366f1', sub }) {
+export function StatCard({ label, value, icon, color = '#6366f1', sub, onClick, active }) {
   return (
-    <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: '18px 20px' }}>
+    <div onClick={onClick} title={onClick ? 'اضغط لعرض القائمة' : undefined} style={{ background: active ? color + '1a' : C.card, border: `1px solid ${active ? color : C.border}`, borderRadius: 12, padding: '18px 20px', cursor: onClick ? 'pointer' : 'default', transition: 'border-color .15s' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <div>
           <div style={{ fontSize: 12, color: C.muted, marginBottom: 6 }}>{label}</div>
