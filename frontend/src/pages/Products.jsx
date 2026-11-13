@@ -202,7 +202,6 @@ export default function Products() {
           </label>
           {form.isKit && (
             <div style={{ marginTop: 10 }}>
-              <div style={{ fontSize: 12, color: 'var(--sub)', marginBottom: 8 }}>لما الصنف ده يخرج في شحنة، بتخرج القطع دي من المخزون. رصيده بيتحسب من رصيد مكوناته.</div>
               {form.components.map((c, i) => {
                 const cp = products.find(p => p._id === c.product);
                 const setC = (patch) => setForm(f => ({ ...f, components: f.components.map((x, k) => k === i ? { ...x, ...patch } : x) }));
