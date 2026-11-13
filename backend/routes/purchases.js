@@ -39,13 +39,10 @@ router.post('/', auth, permit('purchases'), async (req, res) => {
     const purchase = await Purchase.create({ ...req.body, invoiceNo, createdBy: req.user._id });
 
     // Update stock and supplier balance
-    for (const item of purchase.items) {
-      const prod = await Product.findById(item.product);
-      const before = prod.stock;
-      prod.stock += item.qty;
-      await prod.save();
-      await StockMovement.create({ product: item.product, type: 'in', qty: item.qty, before, after: prod.stock, reason: 'فاتورة شراء', reference: invoiceNo, createdBy: req.user._id });
-    }
+    // شراء صنف مركب = استلام مكوناته
+    const { moveStock } = require('../utils/stock');
+    for (const item of purchase.items)
+      await moveStock(item.product, item.qty, { type: 'in', reason: 'فاتورة شراء', reference: invoiceNo, userId: req.user._id });
     if (purchase.total > purchase.paid) {
       await Supplier.findByIdAndUpdate(purchase.supplier, { $inc: { balance: purchase.total - purchase.paid } });
     }

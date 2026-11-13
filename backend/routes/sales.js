@@ -1,6 +1,7 @@
 const router = require('express').Router();
 const { Sale, Product, StockMovement, Customer } = require('../models/index');
 const { auth, permit } = require('../middleware/auth');
+const { moveStock, costOf } = require('../utils/stock');
 
 async function nextInvoiceNo() {
   const last = await Sale.findOne({ invoiceNo: /^SO-/ }).sort('-invoiceNo');
@@ -35,19 +36,15 @@ router.post('/', auth, permit('sales'), async (req, res) => {
     // Snapshot cost prices
     const items = [];
     for (const item of req.body.items) {
-      const prod = await Product.findById(item.product);
-      items.push({ ...item, cost: prod.buyPrice });
+      const prod = await Product.findById(item.product).lean();
+      items.push({ ...item, cost: await costOf(prod) });     // الطقم: مجموع تكلفة مكوناته
     }
     const sale = await Sale.create({ ...req.body, items, invoiceNo, createdBy: req.user._id });
 
     // Deduct stock
-    for (const item of sale.items) {
-      const prod = await Product.findById(item.product);
-      const before = prod.stock;
-      prod.stock -= item.qty;
-      await prod.save();
-      await StockMovement.create({ product: item.product, type: 'out', qty: item.qty, before, after: prod.stock, reason: 'فاتورة مبيعات', reference: invoiceNo, createdBy: req.user._id });
-    }
+    // الصنف المركب بيخصم مكوناته مش نفسه
+    for (const item of sale.items)
+      await moveStock(item.product, -item.qty, { type: 'out', reason: 'فاتورة مبيعات', reference: invoiceNo, userId: req.user._id });
     res.status(201).json(sale);
   } catch(e){ res.status(400).json({ message: e.message }); }
 });

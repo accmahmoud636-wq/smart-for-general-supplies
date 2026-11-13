@@ -200,11 +200,7 @@ async function postOrderGroup(orderId, items, resolve, userId, { deductStock = t
   });
   for (let k = 0; k < items.length; k++) {
     if (deductStock) {
-      const prod = await Product.findById(prods[k]._id);
-      const before = prod.stock;
-      prod.stock -= items[k].qty;
-      await prod.save();
-      await StockMovement.create({ product: prod._id, type: 'out', qty: items[k].qty, before, after: prod.stock, reason: 'طلب أمازون ' + orderId, reference: invoiceNo, createdBy: userId });
+      await require('../utils/stock').moveStock(prods[k]._id, -items[k].qty, { type: 'out', reason: 'طلب أمازون ' + orderId, reference: invoiceNo, userId });
     }
     items[k].sale = sale._id;
     items[k].product = prods[k]._id;
@@ -363,11 +359,8 @@ router.put('/orders/stage', auth, permit('amazon'), async (req, res) => {
       if (stage === 'returned' && o.stage !== 'returned' && o.sale && o.product) {
         const prod = await Product.findById(o.product);
         if (prod) {
-          const before = prod.stock;
-          prod.stock += o.qty;
-          await prod.save();
           const sale = await Sale.findByIdAndUpdate(o.sale, { status: 'returned' }, { new: true });
-          await StockMovement.create({ product: prod._id, type: 'return', qty: o.qty, before, after: prod.stock, reason: 'مرتجع أمازون ' + o.orderId, reference: sale?.invoiceNo || o.orderId, createdBy: req.user._id });
+          await require('../utils/stock').moveStock(prod._id, o.qty, { type: 'return', reason: 'مرتجع أمازون ' + o.orderId, reference: sale?.invoiceNo || o.orderId, userId: req.user._id });
           restocked++;
         }
       }

@@ -172,6 +172,7 @@ const TOOLS = {
       await Purchase.create({ invoiceNo, supplier: sup._id, items: rows, subtotal: total, total, paid: pd, status: pd >= total ? 'paid' : pd > 0 ? 'partial' : 'received', notes: notes || 'سُجّلت من المساعد الذكي', createdBy: user._id });
       for (const i of rows) {
         const p = await Product.findById(i.product);
+        if (p.isKit) { await require('../utils/stock').moveStock(p._id, i.qty, { type: 'in', reason: 'فاتورة شراء', reference: invoiceNo, userId: user._id }); continue; }
         const before = p.stock;
         if (before > 0) p.buyPrice = r2((before * (p.buyPrice || 0) + i.qty * i.price) / (before + i.qty)); else p.buyPrice = i.price;
         p.stock += i.qty;
@@ -206,6 +207,7 @@ const TOOLS = {
     schema: { type: 'object', properties: { productId: { type: 'string' }, newStock: { type: 'number' }, reason: { type: 'string' } }, required: ['productId', 'newStock'] },
     async preview({ productId, newStock, reason }) {
       const p = await getProduct(productId);
+      if (p.isKit) throw new Error('رصيد الصنف المركب بيتحسب من مكوناته — سوّي رصيد المكونات');
       if (!Number.isFinite(+newStock)) throw new Error('الرصيد غير صحيح');
       return { title: `تسوية رصيد «${p.name}»`, lines: [`الرصيد ${p.stock} ← ${newStock} (فرق ${newStock - p.stock > 0 ? '+' : ''}${newStock - p.stock})`, `السبب: ${reason || 'جرد'}`] };
     },

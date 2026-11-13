@@ -71,10 +71,7 @@ router.post('/:id/action', auth, CAN, async (req, res) => {
       // الصنف طلع سليم أو اتصلّح: يرجع للمخزون الرئيسي
       const p = await Product.findById(d.product);
       if (!p) return res.status(400).json({ message: 'الصنف غير موجود' });
-      const before = p.stock;
-      p.stock += d.qty;
-      await p.save();
-      await StockMovement.create({ product: p._id, type: 'return', qty: d.qty, before, after: p.stock, reason: 'إرجاع من مخزن التوالف', reference: d.shipmentNo, createdBy: req.user._id });
+      await require('../utils/stock').moveStock(p._id, d.qty, { type: 'return', reason: 'إرجاع من مخزن التوالف', reference: d.shipmentNo, userId: req.user._id });
     } else if (action !== 'written_off' && action !== 'pending') {
       return res.status(400).json({ message: 'إجراء غير معروف' });
     }

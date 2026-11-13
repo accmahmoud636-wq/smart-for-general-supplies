@@ -75,6 +75,18 @@ mongoose.connect(process.env.MONGO_URI)
         await Setting.create({ key: 'perm_migr_post', value: true });
       }
     } catch (e) { console.error('perm migration:', e.message); }
+    // تصحيح: أي رصيد اتسجل على صنف مركب (من فواتير قبل التحديث) يتنقل لمكوناته، والطقم يرجع صفر
+    try {
+      const { Product } = require('./models/index');
+      const { moveStock } = require('./utils/stock');
+      for (const k of await Product.find({ isKit: true, stock: { $ne: 0 } })) {
+        const d = k.stock;
+        k.stock = 0; await k.save();
+        for (const c of k.components || [])
+          await moveStock(c.product, d * (c.qty || 1), { type: d < 0 ? 'out' : 'in', reason: `تصحيح حركة سابقة على الطقم: ${k.name}`, reference: 'KIT-FIX' });
+        console.log(`kit fix: ${k.name} (${d})`);
+      }
+    } catch (e) { console.error('kit fix:', e.message); }
     const PORT = process.env.PORT || 5000;
     app.listen(PORT, () => console.log('🚀 Server on port ' + PORT));
   })
