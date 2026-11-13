@@ -84,20 +84,29 @@ function readProducts(rows) {
   if (!found) return null;
   const { headerRow, idx } = found;
   const get = (r, f) => idx[f] !== undefined ? clean(r[idx[f]]) : '';
+  // أعمدة SKU إضافية (SKU 2، SKU3، كود 2 ...) — كلها بتتضاف لنفس الكارت
+  const hk = (rows[headerRow] || []).map(h => String(h ?? '').toLowerCase().replace(/[\s\-_/().#]+/g, ''));
+  const taken = new Set(Object.values(idx));
+  const skuCols = hk.map((k, j) => (!taken.has(j) && /^(seller)?sku|^(كود|رمز|رمزsku)\d|sku\d*$/.test(k) && !/status|price|qty|حالة|سعر/.test(k)) ? j : -1).filter(j => j >= 0);
+  const split = (v) => String(v ?? '').split(/[,،;|\n]+/).map(x => x.trim()).filter(Boolean);
   const items = [];
   rows.slice(headerRow + 1).forEach((r, i) => {
     const name = get(r, 'name');
     if (!name) return;
+    // خانة SKU فيها أكتر من رمز «A, B, C»: الأول أساسي والباقي إضافي
+    let [sku = '', ...moreSkus] = split(get(r, 'sku'));
+    const colSkus = skuCols.flatMap(j => split(r[j]));
+    if (!sku && colSkus.length) sku = colSkus.shift();
     items.push({
       row: headerRow + i + 2, name,
-      sku: get(r, 'sku'), asin: get(r, 'asin').toUpperCase(),
+      sku, asin: get(r, 'asin').toUpperCase(),
       barcode: get(r, 'barcode').replace(/\.0+$/, ''),     // Excel بيحوّل الباركود لرقم عشري أحياناً
       buyPrice: idx.buyPrice !== undefined ? num(get(r, 'buyPrice')) : null,
       sellPrice: idx.sellPrice !== undefined ? num(get(r, 'sellPrice')) : null,
       stock: idx.stock !== undefined ? Math.round(num(get(r, 'stock'))) : null,
       minStock: idx.minStock !== undefined && get(r, 'minStock') !== '' ? Math.round(num(get(r, 'minStock'))) : null,
       category: get(r, 'category'), supplier: get(r, 'supplier'), unit: get(r, 'unit'),
-      extraSkus: get(r, 'extraSkus').split(/[,،;|\n]+/).map(s => s.trim()).filter(Boolean),   // «ABC-123×2» = إعلان باكدج فيه قطعتين
+      extraSkus: [...new Set([...moreSkus, ...colSkus, ...split(get(r, 'extraSkus'))])].filter(x => x !== sku),   // «ABC-123×2» = إعلان باكدج فيه قطعتين
     });
   });
   // نفس الصنف متكرر بأكتر من SKU (إعلان لكل SKU في أمازون): يتجمع في كارت واحد
@@ -107,12 +116,13 @@ function readProducts(rows) {
     const k = nameKey(it.name);
     const g = groups.get(k);
     if (!g) { groups.set(k, { ...it, extraSkus: [...it.extraSkus] }); continue; }
+    if (!g.sku && it.sku) { g.sku = it.sku; g.extraSkus = g.extraSkus.filter(x => x !== it.sku); }
     for (const sku of [it.sku, ...it.extraSkus]) if (sku && sku !== g.sku && !g.extraSkus.includes(sku)) g.extraSkus.push(sku);
     for (const f of ['asin', 'barcode', 'category', 'supplier', 'unit']) if (!g[f] && it[f]) g[f] = it[f];
     for (const f of ['buyPrice', 'sellPrice', 'minStock']) if ((g[f] === null || g[f] === 0) && it[f]) g[f] = it[f];
     if (it.stock !== null) g.stock = (g.stock || 0) + it.stock;
   }
-  return { items: [...groups.values()], columns: Object.keys(idx), headerRow, rawRows: items.length };
+  return { items: [...groups.values()], columns: [...Object.keys(idx), ...(skuCols.length ? [`+${skuCols.length} أعمدة SKU`] : [])], headerRow, rawRows: items.length };
 }
 
 // معاينة: إيه اللي اتفهم من الملف قبل ما يتسجل
@@ -146,14 +156,14 @@ router.post('/products/import', auth, permit('products'), async (req, res) => {
     // كل الأصناف مرة واحدة في الذاكرة بدل بحث لكل سطر (الملفات ممكن تبقى آلاف الأصناف)
     const all = await Product.find().lean();
     const bySku = new Map(), byBarcode = new Map(), byName = new Map();
-    const index = (p) => { if (p.sku) bySku.set(p.sku, p); if (p.barcode) byBarcode.set(p.barcode, p); byName.set(p.name.trim(), p); };
+    const index = (p) => { if (p.sku) bySku.set(p.sku, p); if (p.barcode) byBarcode.set(p.barcode, p); byName.set(nameKey(p.name), p); };
     all.forEach(index);
 
     let created = 0, updated = 0;
     const errors = [], ops = [], moves = [], mapOps = [], opRow = [];
     for (const it of out.items) {
       try {
-        const p = (it.sku && bySku.get(it.sku)) || (it.barcode && byBarcode.get(it.barcode)) || byName.get(it.name);
+        const p = (it.sku && bySku.get(it.sku)) || (it.barcode && byBarcode.get(it.barcode)) || byName.get(nameKey(it.name));
         const data = { name: it.name };
         const extra = [...it.extraSkus];
         // صنف موجود وليه SKU أساسي مختلف: الـ SKU الجديد يتضاف كإعلان إضافي بدل ما يمسح القديم
@@ -183,9 +193,10 @@ router.post('/products/import', auth, permit('products'), async (req, res) => {
         opRow.push(it);
         if (it.stock !== null && it.stock !== before)
           moves.push({ product: id, type: 'adjust', qty: Math.abs(it.stock - before), before, after: it.stock, reason: 'رصيد افتتاحي (استيراد)', reference: 'IMPORT', createdBy: req.user._id });
-        for (const raw of extra) {
+        for (const raw of [...new Set(extra)]) {
           const m = String(raw).match(/^(.+?)\s*[x×*]\s*(\d+)$/i);
           const sku = m ? m[1].trim() : raw, qty = m ? Math.max(1, +m[2]) : 1;
+          if (sku === (data.sku || p?.sku)) continue;
           mapOps.push({ updateOne: { filter: { sku }, update: { $set: { sku, product: id, qty } }, upsert: true } });
         }
       } catch (e) { errors.push({ row: it.row, name: it.name, message: e.message }); }
