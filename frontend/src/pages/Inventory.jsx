@@ -328,7 +328,7 @@ export function OpeningBalance() {
       </div>
       <Card style={{ padding: 0 }}>
         <div style={{ display: 'flex', padding: '9px 14px', fontSize: 12, color: C.muted, borderBottom: `1px solid ${C.border}`, gap: 10 }}>
-          <span style={{ flex: 1 }}>الصنف ({list.length})</span><span style={{ width: 110, textAlign: 'center' }}>الكمية</span><span style={{ width: 120, textAlign: 'center' }}>سعر الشراء</span><span style={{ width: 100, textAlign: 'center' }}>القيمة</span>
+          <span style={{ flex: 1 }}>الصنف ({list.length})</span><span style={{ width: 110, textAlign: 'center' }}>الكمية</span><span style={{ width: 120, textAlign: 'center' }}>سعر الوحدة (التكلفة)</span><span style={{ width: 100, textAlign: 'center' }}>إجمالي التكلفة</span>
         </div>
         {list.slice(0, 300).map(p => {
           const e = edits[p._id] || {};
@@ -347,7 +347,7 @@ export function OpeningBalance() {
         })}
         {list.length > 300 && <div style={{ padding: 10, textAlign: 'center', color: C.muted, fontSize: 12 }}>يُعرض أول 300 صنف — استخدم البحث أو الفئة</div>}
       </Card>
-      <div style={{ fontSize: 11, color: C.muted, marginTop: 8 }}>الخانات المظللة بالبرتقالي: أصناف بدون سعر شراء. الأصناف المركبة لا تظهر هنا لأن رصيدها محسوب من مكوناتها.</div>
+      <div style={{ fontSize: 11, color: C.muted, marginTop: 8 }}>الخانات المظللة بالبرتقالي: أصناف بدون سعر وحدة (تكلفة). الأصناف المركبة لا تظهر هنا لأن رصيدها محسوب من مكوناتها.</div>
     </div>
   );
 }
