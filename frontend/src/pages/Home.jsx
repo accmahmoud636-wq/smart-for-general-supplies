@@ -1,3 +1,4 @@
+import { Tile } from '../components/Icon';
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
@@ -62,7 +63,7 @@ export default function Home() {
             {open.map(t => (
               <div key={t.title} onClick={() => nav(t.go)} style={{ background: C.card, border: `1px solid ${C.border}`, borderRight: `4px solid ${t.color}`, borderRadius: 12, padding: 14, cursor: 'pointer' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <span style={{ fontSize: 22 }}>{t.icon}</span>
+                  <Tile icon={t.icon} size={38} color={t.color} />
                   <span style={{ flex: 1, fontWeight: 700 }}>{t.title}</span>
                   <span style={{ fontSize: 22, fontWeight: 800, color: t.color }}>{t.n}</span>
                 </div>

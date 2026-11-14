@@ -469,8 +469,9 @@ router.post('/skus/map', auth, permit('amazon', 'products'), async (req, res) =>
     const components = (Array.isArray(req.body.components) ? req.body.components : [])
       .filter(c => c?.product && String(c.product) !== String(product)).map(c => ({ product: c.product, qty: Math.max(1, Math.round(+c.qty || 1)) }));
     if (!sku || !product) return res.status(400).json({ message: 'رمز SKU والصنف مطلوبان' });
-    const existing = await AmazonSkuMap.findOne({ sku }).populate('product', 'name').lean();
-    if (existing && String(existing.product?._id) !== String(product) && !force)
+    const existing = await AmazonSkuMap.findOne({ sku }).populate('product', 'name active').lean();
+    // مربوط بصنف محذوف = مش مربوط
+    if (existing && existing.product && existing.product.active !== false && String(existing.product._id) !== String(product) && !force)
       return res.status(409).json({ message: `رمز SKU مرتبط بصنف آخر: ${existing.product?.name || '؟'}`, otherProduct: existing.product?.name });
     await AmazonSkuMap.findOneAndUpdate({ sku }, { sku, product, qty, components }, { upsert: true });
     await AmazonOrder.updateMany({ sku }, { product });

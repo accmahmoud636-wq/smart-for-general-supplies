@@ -240,7 +240,10 @@ prodRouter.put('/:id', auth, permit('products'), async (req, res) => {
 
 prodRouter.delete('/:id', auth, permit('products'), async (req, res) => {
   await Product.findByIdAndUpdate(req.params.id, { active: false });
-  res.json({ message: 'تمت الأرشفة' });
+  // رموز SKU بتاعته تتحرر عشان تتربط بصنف تاني من غير «مرتبط بصنف آخر»
+  const { AmazonSkuMap } = require('../models/amazon');
+  const r = await AmazonSkuMap.deleteMany({ product: req.params.id });
+  res.json({ message: 'تمت الأرشفة' + (r.deletedCount ? ` وفك ربط ${r.deletedCount} رمز SKU` : '') });
 });
 
 // Stock adjustment

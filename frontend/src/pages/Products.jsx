@@ -56,7 +56,10 @@ export default function Products() {
     const v = skuInput.trim();
     if (!v) return;
     if (skus.some(x => x.toLowerCase() === v.toLowerCase())) { toast.error('موجود بالفعل'); return; }
-    const other = maps.find(m => m.sku.toLowerCase() === v.toLowerCase() && m.product !== editing);
+    const found = maps.find(m => m.sku.toLowerCase() === v.toLowerCase() && m.product !== editing);
+    // لو مربوط بصنف محذوف (مش في القايمة) بيتنقل على طول من غير سؤال
+    const other = found && products.some(p => p._id === found.product) ? found : null;
+    if (found && !other) setMoveSkus(x => [...x, v]);
     if (other && !confirm(`رمز SKU «${v}» مرتبط بالصنف «${nameOf(other.product)}». هل تريد نقله إلى هذا الصنف؟`)) return;
     if (other) setMoveSkus(x => [...x, v]);
     setSkus(x => [...x, v]); setSkuInput('');

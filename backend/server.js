@@ -114,6 +114,14 @@ mongoose.connect(process.env.MONGO_URI)
         if (fn.deletedCount || fixed) console.log(`🔧 SKU maps: حذف ${fn.deletedCount} FNSKU، تصحيح ${fixed}`);
       }
     } catch (e) { console.error('sku map fix:', e.message); }
+    // روابط SKU لأصناف محذوفة (مؤرشفة) → تتمسح، عشان الرمز يبان «غير مربوط» ويتربط عادي
+    try {
+      const { AmazonSkuMap } = require('./models/amazon');
+      const { Product } = require('./models/index');
+      const live = new Set((await Product.find({ active: { $ne: false } }).select('_id').lean()).map(p => String(p._id)));
+      const dead = (await AmazonSkuMap.find().select('product').lean()).filter(m => !live.has(String(m.product))).map(m => m._id);
+      if (dead.length) { await AmazonSkuMap.deleteMany({ _id: { $in: dead } }); console.log(`🔧 فك ربط ${dead.length} رمز SKU كانوا على أصناف محذوفة`); }
+    } catch (e) { console.error('dead maps:', e.message); }
     // تصحيح: أي رصيد اتسجل على صنف مركب (من فواتير قبل التحديث) يتنقل لمكوناته، والطقم يرجع صفر
     try {
       const { Product } = require('./models/index');

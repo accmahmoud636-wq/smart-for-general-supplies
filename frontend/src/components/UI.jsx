@@ -1,3 +1,4 @@
+import { Tile } from './Icon';
 // ─── Shared UI Components ────────────────────────────────────────────────────
 // ─── المظهر ─────────────────────────────────────────────────────
 export const ACCENTS = {
@@ -144,7 +145,7 @@ export function StatCard({ label, value, icon, color = '#6366f1', sub, onClick, 
           <div style={{ fontSize: 24, fontWeight: 800, color }}>{value}</div>
           {sub && <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>{sub}</div>}
         </div>
-        <div style={{ width: 44, height: 44, borderRadius: 10, background: color + '22', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22 }}>{icon}</div>
+        <Tile icon={icon} size={44} color={color} />
       </div>
     </div>
   );
@@ -154,7 +155,7 @@ export function PageHeader({ title, icon, actions }) {
   return (
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, gap: 10, flexWrap: 'wrap' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        <span style={{ fontSize: 22 }}>{icon}</span>
+        {icon && <Tile icon={icon} size={36} />}
         <span style={{ fontWeight: 800, fontSize: 20 }}>{title}</span>
       </div>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>{actions}</div>

@@ -1,3 +1,5 @@
+import { Tile } from './Icon';
+import { IconBuildingWarehouse } from '@tabler/icons-react';
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -97,7 +99,7 @@ export default function Layout({ children }) {
         ...(mobile ? { position: 'fixed', top: 0, right: 0, zIndex: 1000, transform: drawer ? 'none' : 'translateX(100%)', boxShadow: drawer ? '0 0 30px #0006' : 'none' } : { position: 'sticky', top: 0 }) }}>
         {/* Logo */}
         <div style={{ padding: '18px 16px', borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{ width: 34, height: 34, borderRadius: 8, background: `linear-gradient(135deg,${C.accent},${C.accent2})`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0 }}>🛍️</div>
+          <div style={{ width: 34, height: 34, borderRadius: 8, background: `linear-gradient(135deg,${C.accent},${C.accent2})`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', flexShrink: 0 }}><IconBuildingWarehouse size={20} stroke={1.8} /></div>
           {(!collapsed || mobile) && <div style={{ minWidth: 0 }}>
             <div style={{ fontWeight: 800, fontSize: 13, color: 'var(--text)', lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{THEME.appName}</div>
             <div style={{ fontSize: 10, color: C.muted }}>{THEME.appSub}</div>
@@ -125,7 +127,7 @@ export default function Layout({ children }) {
                       style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', borderRadius: 8, cursor: 'pointer', marginBottom: 1, background: active ? C.accent + '22' : 'transparent', color: active ? C.accentLight : C.sub, transition: 'all .15s', fontWeight: active ? 700 : 400 }}
                       onMouseEnter={e => { if (!active) e.currentTarget.style.background = 'var(--hover)'; }}
                       onMouseLeave={e => { if (!active) e.currentTarget.style.background = 'transparent'; }}>
-                      <span style={{ fontSize: 17, flexShrink: 0 }}>{n.icon}</span>
+                      <Tile icon={n.icon} size={28} />
                       {(!collapsed || mobile) && <span style={{ fontSize: 13, whiteSpace: 'nowrap' }}>{n.label}</span>}
                       {(!collapsed || mobile) && active && <div style={{ marginRight: 'auto', width: 4, height: 4, borderRadius: '50%', background: C.accentLight }} />}
                     </div>
