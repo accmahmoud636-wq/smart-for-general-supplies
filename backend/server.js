@@ -82,6 +82,38 @@ mongoose.connect(process.env.MONGO_URI)
         await Setting.create({ key: 'perm_migr_post', value: true });
       }
     } catch (e) { console.error('perm migration:', e.message); }
+    // تصحيح مرة واحدة: روابط SKU غلط من الاستيراد (أكواد FNSKU X00...، ورموز آخرها X رقم اتقرت باكدج)
+    try {
+      const Setting = require('./models/Setting');
+      if (!(await Setting.findOne({ key: 'fix_sku_maps_2' }).lean())) {
+        const { AmazonSkuMap, AmazonOrder, AmazonTransaction } = require('./models/amazon');
+        const seen = async (sku) => !!(await AmazonOrder.exists({ sku }) || await AmazonTransaction.exists({ sku }));
+        const fn = await AmazonSkuMap.deleteMany({ sku: /^X00[0-9A-Z]{7}$/ });
+        let fixed = 0;
+        // رموز أمازون التلقائية شكلها 2-4-4 (زي 68-J4CS-4TX4 أو L4-XQ15-SX03): لو اتقصّت عند X نرجّعها
+        for (const m of await AmazonSkuMap.find({ qty: { $gt: 1 }, sku: /^[A-Z0-9]{2}-[A-Z0-9]{4}-[A-Z0-9]{0,2}$/ }).lean()) {
+          const left = 3 - m.sku.split('-')[2].length;     // عدد الأرقام اللي كانت بعد X
+          if (String(m.qty).length > left || await seen(m.sku)) continue;   // رمز حقيقي موجود في أمازون: نسيبه
+          const real = `${m.sku}X${String(m.qty).padStart(left, '0')}`;
+          if (await AmazonSkuMap.exists({ sku: real })) await AmazonSkuMap.deleteOne({ _id: m._id });
+          else await AmazonSkuMap.updateOne({ _id: m._id }, { $set: { sku: real, qty: 1 } });
+          fixed++;
+        }
+        // نفس المشكلة بس آخرها X1 أو X0 (اتسجلت كمية 1): مش معروف الأصلي — ندوّر عليه في طلبات/معاملات أمازون، وإلا الرابط يتمسح (إعادة الاستيراد بترجّعه صح)
+        for (const m of await AmazonSkuMap.find({ qty: { $lte: 1 }, sku: /^[A-Z0-9]{2}-[A-Z0-9]{4}-[A-Z0-9]{0,2}$/ }).lean()) {
+          const left = 3 - m.sku.split('-')[2].length;
+          if (await seen(m.sku)) continue;
+          const cands = ['0', '1'].map(d => `${m.sku}X${d.padStart(left, '0')}`);
+          let real = null;
+          for (const c of cands) if (await seen(c)) { real = c; break; }
+          if (real && !(await AmazonSkuMap.exists({ sku: real }))) await AmazonSkuMap.updateOne({ _id: m._id }, { $set: { sku: real, qty: 1 } });
+          else await AmazonSkuMap.deleteOne({ _id: m._id });
+          fixed++;
+        }
+        await Setting.create({ key: 'fix_sku_maps_2', value: { fnsku: fn.deletedCount, fixed, at: new Date() } });
+        if (fn.deletedCount || fixed) console.log(`🔧 SKU maps: حذف ${fn.deletedCount} FNSKU، تصحيح ${fixed}`);
+      }
+    } catch (e) { console.error('sku map fix:', e.message); }
     // تصحيح: أي رصيد اتسجل على صنف مركب (من فواتير قبل التحديث) يتنقل لمكوناته، والطقم يرجع صفر
     try {
       const { Product } = require('./models/index');

@@ -87,7 +87,8 @@ function readProducts(rows) {
   // أعمدة SKU إضافية (SKU 2، SKU3، كود 2 ...) — كلها بتتضاف لنفس الكارت
   const hk = (rows[headerRow] || []).map(h => String(h ?? '').toLowerCase().replace(/[\s\-_/().#]+/g, ''));
   const taken = new Set(Object.values(idx));
-  const skuCols = hk.map((k, j) => (!taken.has(j) && /^(seller)?sku|^(كود|رمز|رمزsku)\d|sku\d*$/.test(k) && !/status|price|qty|حالة|سعر/.test(k)) ? j : -1).filter(j => j >= 0);
+  // ملحوظة: fnsku (كود ملصق المخزن X00...) مش SKU إعلان — مايتقريش
+  const skuCols = hk.map((k, j) => (!taken.has(j) && /^((seller)?sku|كود|رمز|رمزsku)\d+$|^(seller)?sku(2|3|4|5|اضافي|إضافي|other|extra)/.test(k) && !/fnsku|status|price|qty|حالة|سعر/.test(k)) ? j : -1).filter(j => j >= 0);
   const split = (v) => String(v ?? '').split(/[,،;|\n]+/).map(x => x.trim()).filter(Boolean);
   const items = [];
   rows.slice(headerRow + 1).forEach((r, i) => {
@@ -194,7 +195,8 @@ router.post('/products/import', auth, permit('products'), async (req, res) => {
         if (it.stock !== null && it.stock !== before)
           moves.push({ product: id, type: 'adjust', qty: Math.abs(it.stock - before), before, after: it.stock, reason: 'رصيد افتتاحي (استيراد)', reference: 'IMPORT', createdBy: req.user._id });
         for (const raw of [...new Set(extra)]) {
-          const m = String(raw).match(/^(.+?)\s*[x×*]\s*(\d+)$/i);
+          // الباكدج: «ABC-123×2» أو «ABC-123 x2» — حرف X لازق في آخر الـ SKU (زي 68-J4CS-4TX4) جزء من الرمز مش عدد
+          const m = String(raw).match(/^(.+?)\s*(?:[×*]|\s[xX])\s*(\d+)$/);
           const sku = m ? m[1].trim() : raw, qty = m ? Math.max(1, +m[2]) : 1;
           if (sku === (data.sku || p?.sku)) continue;
           mapOps.push({ updateOne: { filter: { sku }, update: { $set: { sku, product: id, qty } }, upsert: true } });
