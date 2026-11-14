@@ -27,16 +27,16 @@ export default function Home() {
 
   // المهام: كل واحدة ليها عدد ومكان تروحله
   const tasks = h ? [
-    s && { n: s.drafts.length, icon: '📝', color: '#f59e0b', title: 'شحنات قيد الإعداد', hint: 'لم يتم ترحيلها بعد', go: '/shipments?status=draft', list: s.drafts.map(x => `${x.no} · ${x.employee || '—'} · ${x.qty} وحدة`) },
-    s && { n: s.toMatch.length, icon: '⬆️', color: '#3b82f6', title: 'شحنات بانتظار المطابقة', hint: 'تم الترحيل — يلزم رفع تقرير أمازون للمطابقة', go: s.toMatch[0] ? `/shipments?open=${s.toMatch[0]._id}` : '/shipments', list: s.toMatch.map(x => `${x.no} · ${fmtDate(x.date)}`) },
-    s && { n: s.diff.length, icon: '❌', color: '#ef4444', title: 'فروقات في المطابقة', hint: 'الكميات المسجّلة لا تطابق تقرير أمازون', go: s.diff[0] ? `/shipments?open=${s.diff[0]._id}` : '/shipments', list: s.diff.map(x => `${x.no} · ${fmtDate(x.date)}`) },
-    s?.damaged && { n: s.damaged.length, icon: '⚠️', color: '#f59e0b', title: 'مرتجعات تالفة قيد المراجعة', hint: 'يلزم اتخاذ قرار: مطالبة أمازون أو إعدام أو إرجاع للمخزون', go: '/damaged', list: s.damaged.map(x => `${x.name} ×${x.qty} · ${x.no}`) },
-    st && { n: st.out.length, icon: '🚫', color: '#ef4444', title: 'أصناف نفد مخزونها', hint: 'الرصيد صفر أو أقل', go: '/amazon?tab=reorder', list: st.out.map(p => `${p.name} (${p.stock})`) },
-    st && { n: st.low.length, icon: '⚠️', color: '#f59e0b', title: 'أصناف تحت حد الطلب', hint: 'الرصيد أقل من الحد الأدنى', go: '/amazon?tab=reorder', list: st.low.map(p => `${p.name} — الرصيد ${p.stock}`) },
-    a?.toClose && { n: a.toClose.length, icon: '🛑', color: '#ef4444', title: 'اقفل الإعلانات دي على أمازون', hint: 'رصيدها خلص أو قرّب يخلص والإعلان لسه شغال — صفّر الكمية عشان محدش يطلبها', go: '/listings?alerts=1', list: a.toClose.map(r => `${r.name} — ${r.available <= 0 ? 'خلص' : 'متاح ' + r.available}${r.sold30 ? ' · باع ' + r.sold30 : ''}`) },
-    a?.toOpen && { n: a.toOpen.length, icon: '✅', color: '#10b981', title: 'إعلانات رجع لها رصيد', hint: 'كانت مقفولة — رجّع كميتها على أمازون', go: '/listings?alerts=1', list: a.toOpen.map(r => `${r.name} — متاح ${r.available}`) },
+    s && { n: s.draftsCount ?? s.drafts.length, icon: '📝', color: '#f59e0b', title: 'شحنات قيد الإعداد', hint: 'لم يتم ترحيلها بعد', go: '/shipments?status=draft', list: s.drafts.map(x => `${x.no} · ${x.employee || '—'} · ${x.qty} وحدة`) },
+    s && { n: s.toMatchCount ?? s.toMatch.length, icon: '⬆️', color: '#3b82f6', title: 'شحنات بانتظار المطابقة', hint: 'تم الترحيل — يلزم رفع تقرير أمازون للمطابقة', go: s.toMatch[0] ? `/shipments?open=${s.toMatch[0]._id}` : '/shipments', list: s.toMatch.map(x => `${x.no} · ${fmtDate(x.date)}`) },
+    s && { n: s.diffCount ?? s.diff.length, icon: '❌', color: '#ef4444', title: 'فروقات في المطابقة', hint: 'الكميات المسجّلة لا تطابق تقرير أمازون', go: s.diff[0] ? `/shipments?open=${s.diff[0]._id}` : '/shipments', list: s.diff.map(x => `${x.no} · ${fmtDate(x.date)}`) },
+    s?.damaged && { n: s.damagedCount ?? s.damaged.length, icon: '⚠️', color: '#f59e0b', title: 'مرتجعات تالفة قيد المراجعة', hint: 'يلزم اتخاذ قرار: مطالبة أمازون أو إعدام أو إرجاع للمخزون', go: '/damaged', list: s.damaged.map(x => `${x.name} ×${x.qty} · ${x.no}`) },
+    st && { n: st.outCount ?? st.out.length, icon: '🚫', color: '#ef4444', title: 'أصناف نفد مخزونها', hint: 'الرصيد صفر أو أقل', go: '/amazon?tab=reorder', list: st.out.map(p => `${p.name} (${p.stock})`) },
+    st && { n: st.lowCount ?? st.low.length, icon: '⚠️', color: '#f59e0b', title: 'أصناف تحت حد الطلب', hint: 'الرصيد أقل من الحد الأدنى', go: '/amazon?tab=reorder', list: st.low.map(p => `${p.name} — الرصيد ${p.stock}`) },
+    a?.toClose && { n: a.toCloseCount ?? a.toClose.length, icon: '🛑', color: '#ef4444', title: 'اقفل الإعلانات دي على أمازون', hint: 'رصيدها خلص أو قرّب يخلص والإعلان لسه شغال — صفّر الكمية عشان محدش يطلبها', go: '/listings?alerts=1', list: a.toClose.map(r => `${r.name} — ${r.available <= 0 ? 'خلص' : 'متاح ' + r.available}${r.sold30 ? ' · باع ' + r.sold30 : ''}`) },
+    a?.toOpen && { n: a.toOpenCount ?? a.toOpen.length, icon: '✅', color: '#10b981', title: 'إعلانات رجع لها رصيد', hint: 'كانت مقفولة — رجّع كميتها على أمازون', go: '/listings?alerts=1', list: a.toOpen.map(r => `${r.name} — متاح ${r.available}`) },
     a && { n: a.unmapped, icon: '🔗', color: '#8b5cf6', title: 'رموز SKU غير مرتبطة', hint: 'يلزم ربطها بالأصناف لاحتساب الربحية والمخزون', go: '/amazon?tab=skus', list: [] },
-    a && { n: a.refunds.length, icon: '↩️', color: '#ec4899', title: 'مرتجعات آخر ٧ أيام', hint: 'يُرجى التحقق من استلامها وتسجيلها', go: '/amazon?tab=recon', list: a.refunds.map(r => `${(r.name || '').slice(0, 40)} ×${r.qty} · ${fmt(r.amount)}`) },
+    a && { n: a.refundsCount ?? a.refunds.length, icon: '↩️', color: '#ec4899', title: 'مرتجعات آخر ٧ أيام', hint: 'يُرجى التحقق من استلامها وتسجيلها', go: '/amazon?tab=recon', list: a.refunds.map(r => `${(r.name || '').slice(0, 40)} ×${r.qty} · ${fmt(r.amount)}`) },
     h.backup && { n: h.backup.days === null || h.backup.days >= 7 ? 1 : 0, icon: '💾', color: '#10b981', title: 'نسخة احتياطية', hint: h.backup.days === null ? 'لم تُنزَّل أي نسخة احتياطية بعد' : `آخر نسخة منذ ${h.backup.days} يوم — يُنصح بنسخة أسبوعياً`, go: '/settings?tab=data', list: [] },
   ].filter(Boolean) : [];
   const open = tasks.filter(t => t.n > 0);
@@ -68,7 +68,7 @@ export default function Home() {
                 </div>
                 <div style={{ fontSize: 12, color: C.muted, margin: '6px 0' }}>{t.hint}</div>
                 {t.list.slice(0, 3).map((l, i) => <div key={i} style={{ fontSize: 12, color: C.sub, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>• {l}</div>)}
-                {t.list.length > 3 && <div style={{ fontSize: 11, color: C.muted }}>+ {t.list.length - 3} أخرى</div>}
+                {t.list.length > 0 && t.n > 3 && <div style={{ fontSize: 11, color: C.muted }}>+ {t.n - 3} أخرى</div>}
                 <div style={{ fontSize: 12, color: C.accentLight, marginTop: 6, fontWeight: 700 }}>عرض التفاصيل ←</div>
               </div>
             ))}

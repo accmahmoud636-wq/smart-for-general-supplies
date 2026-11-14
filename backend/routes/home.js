@@ -59,6 +59,9 @@ router.get('/', auth, async (req, res) => {
       const last = (await Setting.findOne({ key: 'last_backup' }).lean())?.value;
       out.backup = { last: last?.at || null, days: last ? Math.floor((Date.now() - new Date(last.at)) / 864e5) : null };
     }
+    // القوايم الطويلة: العدد + أول ٥ بس (الرئيسية بتعرض ٣) — الرد أخف بكتير
+    const trim = (o) => { if (!o) return; for (const k of Object.keys(o)) if (Array.isArray(o[k]) && o[k].length > 5) { o[k + 'Count'] = o[k].length; o[k] = o[k].slice(0, 5); } };
+    trim(out.shipments); trim(out.stock); trim(out.amazon);
     res.json(out);
   } catch (e) { res.status(500).json({ message: e.message }); }
 });

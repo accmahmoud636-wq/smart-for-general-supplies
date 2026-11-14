@@ -86,6 +86,7 @@ const purchaseSchema = new Schema({
   createdBy: { type: Schema.Types.ObjectId, ref: 'User' }
 }, { timestamps: true });
 purchaseSchema.virtual('remaining').get(function() { return this.total - this.paid; });
+purchaseSchema.index({ date: -1 });
 const Purchase = mongoose.model('Purchase', purchaseSchema);
 
 // ─── SALES INVOICE ────────────────────────────────────────────
@@ -114,6 +115,7 @@ const saleSchema = new Schema({
   notes:          { type: String, default: '' },
   createdBy:      { type: Schema.Types.ObjectId, ref: 'User' }
 }, { timestamps: true });
+saleSchema.index({ date: -1 });
 const Sale = mongoose.model('Sale', saleSchema);
 
 // ─── EXPENSE ──────────────────────────────────────────────────
@@ -139,6 +141,8 @@ const stockSchema = new Schema({
   reference: { type: String, default: '' }, // invoice ID
   createdBy: { type: Schema.Types.ObjectId, ref: 'User' }
 }, { timestamps: true });
+stockSchema.index({ product: 1, createdAt: -1 });
+stockSchema.index({ createdAt: -1 });
 const StockMovement = mongoose.model('StockMovement', stockSchema);
 
 module.exports = { Category, Supplier, Customer, Product, Purchase, Sale, Expense, StockMovement };

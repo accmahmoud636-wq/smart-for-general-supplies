@@ -22,6 +22,8 @@ const amazonOrderSchema = new Schema({
   manual:       { type: Boolean, default: false } // اتسجل من شاشة الاسكانر قبل رفع التقرير
 }, { timestamps: true });
 amazonOrderSchema.index({ orderId: 1, sku: 1 }, { unique: true });
+amazonOrderSchema.index({ purchaseDate: -1 });
+amazonOrderSchema.index({ sku: 1 });
 const AmazonOrder = mongoose.model('AmazonOrder', amazonOrderSchema);
 
 // ─── AMAZON TRANSACTION (من تقرير المعاملات / التسوية) ──────────
@@ -47,6 +49,8 @@ const amazonTxSchema = new Schema({
   other:         { type: Number, default: 0 },
   total:         { type: Number, default: 0 }
 }, { timestamps: true });
+amazonTxSchema.index({ date: -1 });
+amazonTxSchema.index({ kind: 1, date: -1 });
 const AmazonTransaction = mongoose.model('AmazonTransaction', amazonTxSchema);
 
 // ─── ربط SKU أمازون بمنتج في النظام ───────────────────────────

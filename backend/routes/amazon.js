@@ -811,7 +811,15 @@ async function saveAlertState(st) {
   const Setting = require('../models/Setting');
   await Setting.findOneAndUpdate({ key: ALERT_KEY }, { key: ALERT_KEY, value: st }, { upsert: true });
 }
-async function listingAlerts() {
+// النتيجة بتتحفظ دقيقة (الرئيسية وصفحة الإعلانات بيطلبوها كتير) — بتتمسح مع أي تغيير في التنبيهات
+let alertsCache = null;
+async function listingAlerts(fresh = false) {
+  if (!fresh && alertsCache && Date.now() - alertsCache.at < 60e3) return alertsCache.data;
+  const data = await computeListingAlerts();
+  alertsCache = { at: Date.now(), data };
+  return data;
+}
+async function computeListingAlerts() {
   const st = await alertState();
   const { parts, products } = await buildResolver();
   const maps = await AmazonSkuMap.find().select('sku').lean();
@@ -867,7 +875,7 @@ router.post('/listing-alerts', auth, permit('amazon'), async (req, res) => {
     else return res.status(400).json({ message: 'إجراء غير معروف' });
     await saveAlertState(st);
     const msg = action === 'close' ? `تم تسجيل قفل ${skus.length} إعلان` : action === 'open' ? `تم تسجيل فتح ${skus.length} إعلان` : `حد التنبيه: ${st.min}`;
-    res.json({ message: msg, ...(await listingAlerts()) });
+    res.json({ message: msg, ...(await listingAlerts(true)) });
   } catch (e) { res.status(500).json({ message: e.message }); }
 });
 

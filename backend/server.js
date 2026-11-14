@@ -5,6 +5,8 @@ const cors = require('cors');
 const path = require('path');
 
 const app = express();
+// ضغط الردود (البيانات وملفات البرنامج بتنزل أصغر ٤-٦ مرات)
+try { app.use(require('compression')({ threshold: 1024 })); } catch { console.warn('compression غير مثبت'); }
 app.use(cors({ origin: process.env.CLIENT_URL || '*', credentials: true }));
 // تقارير أمازون ممكن تكون كبيرة — وملف الاسترجاع أكبر
 const jsonSmall = express.json({ limit: '25mb' }), jsonBig = express.json({ limit: '150mb' });
@@ -39,7 +41,10 @@ app.use('/api/home',       require('./routes/home'));
 app.use('/api/admin',      require('./routes/admin'));
 
 if (process.env.NODE_ENV === 'production') {
-  app.use(express.static(path.join(__dirname, '../frontend/dist')));
+  // ملفات البرنامج أسماؤها بتتغير مع كل تحديث → المتصفح يحتفظ بيها؛ index.html دايماً جديد
+  app.use(express.static(path.join(__dirname, '../frontend/dist'), {
+    setHeaders: (res, file) => res.setHeader('Cache-Control', /[\\/]assets[\\/]/.test(file) ? 'public, max-age=31536000, immutable' : 'no-cache'),
+  }));
   app.get('*', (req, res) => {
     if (!req.path.startsWith('/api'))
       res.sendFile(path.join(__dirname, '../frontend/dist/index.html'));
