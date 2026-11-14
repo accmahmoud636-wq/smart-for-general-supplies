@@ -79,11 +79,15 @@ router.get('/categories', auth, async (req, res) => {
     const days = Math.min(365, Math.max(7, +req.query.days || 30));
     const since = new Date(Date.now() - days * 864e5);
     const r2 = (n) => Math.round((n || 0) * 100) / 100;
-    const [cats, { resolve, parts, products }, orders] = await Promise.all([
+    const [cats, { resolve, parts, products }, ords, txs] = await Promise.all([
       Category.find().lean(),
       buildResolver(),
       AmazonOrder.find({ purchaseDate: { $gte: since }, stage: { $ne: 'cancelled' } }).select('sku asin qty itemPrice').lean(),
+      AmazonTransaction.find({ date: { $gte: since }, kind: 'order', sku: { $ne: '' } }).select('sku qty productSales').lean(),
     ]);
+    // المبيعات من تقرير الطلبات، والإعلانات اللي مالهاش طلبات مرفوعة تتحسب من تقرير المعاملات
+    const hasOrders = new Set(ords.map(o => o.sku.toLowerCase()));
+    const orders = [...ords, ...txs.filter(t => !hasOrders.has(t.sku.toLowerCase())).map(t => ({ sku: t.sku, asin: '', qty: t.qty, itemPrice: t.productSales }))];
     const full = await Product.find({ active: { $ne: false }, isKit: { $ne: true } }).select('category stock minStock buyPrice').lean();
     const catOf = new Map(full.map(p => [String(p._id), p.category ? String(p.category) : 'none']));
 
@@ -117,8 +121,8 @@ router.get('/categories', auth, async (req, res) => {
       const cover = perDay ? Math.round(x.units / perDay) : null;
       // التشخيص: مقارنة نصيب القسم من المبيعات بنصيبه من رأس المال
       let status = 'balanced', insight = '';
-      if (!T.revenue) { status = 'nodata'; insight = 'ارفع تقرير الطلبات لعرض أداء القسم'; }
-      else if (!T.value) { insight = x.revenue ? `${salesShare.toFixed(0)}% من المبيعات — أضف أسعار الشراء لمقارنة رأس المال` : `لا توجد مبيعات خلال ${days} يوماً`; status = x.revenue ? 'balanced' : 'frozen'; }
+      if (!T.revenue) { status = 'nodata'; insight = 'يُرجى رفع تقرير المعاملات أو الطلبات من صفحة الإعلانات لعرض أداء القسم'; }
+      else if (!T.value) { insight = x.revenue ? `${salesShare.toFixed(0)}% من المبيعات — يُرجى إضافة أسعار الشراء لمقارنة رأس المال` : `لا توجد مبيعات خلال ${days} يوماً`; status = x.revenue ? 'balanced' : 'frozen'; }
       else if (!x.revenue && !x.units) { status = 'nodata'; insight = `لا يوجد رصيد ولا مبيعات خلال ${days} يوماً — يلزم اتخاذ قرار بالشراء للقسم أو إغلاقه`; }
       else if (!x.revenue && x.value > 0) { status = 'frozen'; insight = `لا توجد مبيعات خلال ${days} يوماً — رأس مال مجمّد بقيمة ${Math.round(x.value).toLocaleString('en')}`; }
       else if (salesShare >= Math.max(valueShare, 1) * 1.5) { status = 'engine'; insight = `يحقق ${salesShare.toFixed(0)}% من المبيعات بـ ${valueShare.toFixed(0)}% فقط من رأس المال — يُنصح بتوسيع القسم وزيادة أصنافه`; }

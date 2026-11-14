@@ -913,7 +913,14 @@ router.get('/overview', auth, permit('amazon', 'amazon:read'), async (req, res) 
     const today = new Date(now); today.setHours(0, 0, 0, 0);
     const since30 = new Date(today - 29 * DAY);
     const { resolve, mult, parts, kitCost, products } = await buildResolver();
-    const lines = await AmazonOrder.find({ purchaseDate: { $gte: since30 }, stage: { $ne: 'cancelled' } }).lean();
+    const [ords, txs] = await Promise.all([
+      AmazonOrder.find({ purchaseDate: { $gte: since30 }, stage: { $ne: 'cancelled' } }).lean(),
+      AmazonTransaction.find({ date: { $gte: since30 }, kind: 'order', sku: { $ne: '' } }).select('orderId sku qty productSales date description').lean(),
+    ]);
+    // تقرير الطلبات + تقرير المعاملات: الطلب اللي في الاتنين يتحسب مرة واحدة
+    const seenOrd = new Set(ords.map(o => o.orderId + '|' + o.sku.toLowerCase()));
+    const lines = [...ords, ...txs.filter(t => !seenOrd.has(t.orderId + '|' + t.sku.toLowerCase()))
+      .map(t => ({ orderId: t.orderId, sku: t.sku, asin: '', qty: t.qty, itemPrice: t.productSales, purchaseDate: t.date, productName: t.description }))];
 
     const period = (from) => {
       const ls = lines.filter(l => new Date(l.purchaseDate) >= from);
