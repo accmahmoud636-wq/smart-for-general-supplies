@@ -14,7 +14,9 @@ router.get('/', auth, async (req, res) => {
     const can = (p) => req.user.hasPermission(p);
     const out = {};
 
-    if (can('shipments:read')) {
+    // الأقسام بتتحسب بالتوازي بدل واحدة ورا التانية
+    const jobs = [];
+    if (can('shipments:read')) jobs.push((async () => {
       const recent = (await Shipment.find({ $or: [{ status: 'draft' }, { status: 'posted', 'match.result': { $ne: 'matched' } }] })
         .populate('employee', 'name').populate('customer', 'name platform').sort('-createdAt').limit(100).lean())
         // المطابقة بتقرير أمازون: شحنات أمازون بس (أو القديمة اللي من غير عميل)
@@ -27,38 +29,39 @@ router.get('/', auth, async (req, res) => {
         damaged: (await Damaged.find({ status: 'pending' }).select('name qty shipmentNo').sort('-createdAt').limit(100).lean())
           .map(d => ({ _id: d._id, name: d.name, qty: d.qty, no: d.shipmentNo })),
       };
-    }
+    })());
 
-    if (can('products:read')) {
+    if (can('products:read')) jobs.push((async () => {
       const prods = await Product.find({ active: { $ne: false } }).select('name stock minStock').lean();
       out.stock = {
         out: prods.filter(p => p.stock <= 0).map(p => ({ _id: p._id, name: p.name, stock: p.stock })),
         low: prods.filter(p => p.stock > 0 && p.stock <= (p.minStock || 0)).map(p => ({ _id: p._id, name: p.name, stock: p.stock, minStock: p.minStock })),
       };
-    }
+    })());
 
-    if (can('amazon:read')) {
-      const { resolve } = await buildResolver();
-      const [txSkus, orderSkus] = await Promise.all([
+    if (can('amazon:read')) jobs.push((async () => {
+      const since = new Date(Date.now() - 7 * 864e5);
+      const [{ resolve }, txSkus, orderSkus, refunds, la] = await Promise.all([
+        buildResolver(),
         AmazonTransaction.distinct('sku', { sku: { $ne: '' }, kind: { $in: ['order', 'refund'] } }),
-        AmazonOrder.distinct('sku')
+        AmazonOrder.distinct('sku'),
+        AmazonTransaction.find({ kind: 'refund', date: { $gte: since } }).select('date orderId description qty total').sort('-date').lean(),
+        require('./amazon').listingAlerts(),
       ]);
       const unmapped = [...new Set([...txSkus, ...orderSkus])].filter(s => s && !resolve(s));
-      const since = new Date(Date.now() - 7 * 864e5);
-      const refunds = await AmazonTransaction.find({ kind: 'refund', date: { $gte: since } }).select('date orderId description qty total').sort('-date').lean();
-      const la = await require('./amazon').listingAlerts();
       out.amazon = {
         toClose: la.toClose.map(r => ({ sku: r.sku, name: r.name, available: r.available, sold30: r.sold30 })),
         toOpen: la.toOpen.map(r => ({ sku: r.sku, name: r.name, available: r.available })),
         unmapped: unmapped.length,
         refunds: refunds.map(r => ({ date: r.date, orderId: r.orderId, name: r.description, qty: Math.abs(r.qty), amount: Math.round(r.total * 100) / 100 })),
       };
-    }
-    if (req.user.role === 'superadmin') {
+    })());
+    if (req.user.role === 'superadmin') jobs.push((async () => {
       const Setting = require('../models/Setting');
       const last = (await Setting.findOne({ key: 'last_backup' }).lean())?.value;
       out.backup = { last: last?.at || null, days: last ? Math.floor((Date.now() - new Date(last.at)) / 864e5) : null };
-    }
+    })());
+    await Promise.all(jobs);
     // القوايم الطويلة: العدد + أول ٥ بس (الرئيسية بتعرض ٣) — الرد أخف بكتير
     const trim = (o) => { if (!o) return; for (const k of Object.keys(o)) if (Array.isArray(o[k]) && o[k].length > 5) { o[k + 'Count'] = o[k].length; o[k] = o[k].slice(0, 5); } };
     trim(out.shipments); trim(out.stock); trim(out.amazon);

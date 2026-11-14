@@ -122,7 +122,9 @@ function kindFromType(type) {
 }
 
 // يربط SKU أمازون بمنتج: جدول الربط ← SKU المنتج ← ASIN
-async function buildResolver() {
+// فهرس الأصناف ↔ رموز SKU: بيتحسب مرة واحدة ويتشارك بين كل الطلبات (بيتجدد مع أي تعديل)
+function buildResolver() { return require('../utils/cache').memo('resolver', 5 * 60e3, buildResolverRaw); }
+async function buildResolverRaw() {
   const [maps, products] = await Promise.all([
     AmazonSkuMap.find().lean(),
     Product.find().select('name sku asin barcode buyPrice sellPrice stock minStock active isKit components').lean()

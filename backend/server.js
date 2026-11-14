@@ -13,6 +13,11 @@ const jsonSmall = express.json({ limit: '25mb' }), jsonBig = express.json({ limi
 app.use((req, res, next) => (req.path === '/api/admin/restore' ? jsonBig : jsonSmall)(req, res, next));
 
 app.use(require('./utils/activity').activityLogger);   // سجل النشاط
+// الذاكرة المؤقتة: أي كتابة تمسحها — والصفحات الثقيلة بتترد منها فوراً لو مفيش تغيير (لحد 10 دقايق)
+const { invalidator, responseCache } = require('./utils/cache');
+app.use(invalidator);
+app.use(['/api/home', '/api/amazon/overview', '/api/amazon/listings', '/api/amazon/listing-alerts', '/api/amazon/reorder', '/api/amazon/profitability',
+  '/api/amazon/reconciliation', '/api/amazon/settlements', '/api/amazon/summary', '/api/reports', '/api/seasons'], responseCache(10 * 60e3));
 app.use('/api/auth',       require('./routes/auth'));
 app.use('/api/users',      require('./routes/users'));
 
@@ -46,8 +51,8 @@ if (process.env.NODE_ENV === 'production') {
     setHeaders: (res, file) => res.setHeader('Cache-Control', /[\\/]assets[\\/]/.test(file) ? 'public, max-age=31536000, immutable' : 'no-cache'),
   }));
   app.get('*', (req, res) => {
-    if (!req.path.startsWith('/api'))
-      res.sendFile(path.join(__dirname, '../frontend/dist/index.html'));
+    if (!req.path.startsWith('/api')) res.sendFile(path.join(__dirname, '../frontend/dist/index.html'));
+    else res.status(404).json({ message: 'المسار غير موجود' });
   });
 }
 
