@@ -13,8 +13,8 @@ const CUR = THEME.currency || 'ج.م';
 const FOCUS = ['restock', 'loss', 'returns', 'unmapped', 'declining', 'dead', 'no_listing'];
 // فلاتر الكروت اللي فوق (غير الإجراءات)
 const CARD_FILTERS = {
-  sold:    { label: 'إعلانات باعت', color: '#6366f1', icon: '📣', test: r => r.units > 0 },
-  lossret: { label: 'بتخسر أو مرتجعها عالي', color: '#f97316', icon: '💸', test: r => r.action === 'loss' || r.action === 'returns' },
+  sold:    { label: 'إعلانات حققت مبيعات', color: '#6366f1', icon: '📣', test: r => r.units > 0 },
+  lossret: { label: 'خاسرة أو مرتفعة المرتجعات', color: '#f97316', icon: '💸', test: r => r.action === 'loss' || r.action === 'returns' },
   stars:   { label: 'الأعلى مبيعاً', color: '#10b981', icon: '⭐', test: r => r.isStar },
 };
 const ICONS = { restock: '📦', loss: '💸', returns: '↩️', unmapped: '🔗', declining: '📉', dead: '💤', no_listing: '➕', star: '⭐', growing: '📈', ok: '✔️' };
@@ -137,23 +137,23 @@ export default function Listings() {
 
       {last && (
         <Card style={{ marginBottom: 14, borderColor: '#10b98166', fontSize: 13, color: C.sub }}>
-          ✅ آخر رفع: <b>{last.name}</b> (تقرير {last.kind}) — {last.message}. الطلبات المكررة بتتحدّث ومابتتكررش.
+          ✅ آخر رفع: <b>{last.name}</b> (تقرير {last.kind}) — {last.message}. تُحدَّث الطلبات المكررة دون تكرارها.
         </Card>
       )}
       {!K.hasOrders && !K.hasTx && (
         <Card style={{ marginBottom: 14, borderColor: '#f59e0b66', fontSize: 13, color: C.sub, lineHeight: 1.9 }}>
           لا توجد بيانات أمازون في هذه الفترة. ارفع <b>تقرير المعاملات</b> (Payments ← Reports Repository ← Transaction) أو <b>تقرير كل الطلبات</b> من زر الرفع أعلاه.
-          تقرير المعاملات لوحده كفاية: منه المبيعات والربح والمرتجعات.
+          تقرير المعاملات وحده كافٍ لاحتساب المبيعات والأرباح والمرتجعات.
         </Card>
       )}
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(170px,1fr))', gap: 12, marginBottom: 16 }}>
-        <StatCard onClick={() => pick('sold')} active={filter === 'sold'} label="إعلانات باعت" value={K.active}  icon="📣" color="#6366f1" sub={`من ${K.listings.toLocaleString('en')} إعلان · ${K.units} وحدة · ${fmt(K.revenue)} ${CUR}`} />
-        <StatCard onClick={() => pick('restock')} active={filter === 'restock'} label="محتاجة كمية" value={K.counts.restock} icon="📦" color="#ef4444" />
-        <StatCard onClick={() => pick('lossret')} active={filter === 'lossret'} label="بتخسر أو مرتجعها عالي" value={K.counts.loss + K.counts.returns} icon="💸" color="#f97316" />
+        <StatCard onClick={() => pick('sold')} active={filter === 'sold'} label="إعلانات حققت مبيعات" value={K.active}  icon="📣" color="#6366f1" sub={`من ${K.listings.toLocaleString('en')} إعلان · ${K.units} وحدة · ${fmt(K.revenue)} ${CUR}`} />
+        <StatCard onClick={() => pick('restock')} active={filter === 'restock'} label="تحتاج إلى إعادة طلب" value={K.counts.restock} icon="📦" color="#ef4444" />
+        <StatCard onClick={() => pick('lossret')} active={filter === 'lossret'} label="خاسرة أو مرتفعة المرتجعات" value={K.counts.loss + K.counts.returns} icon="💸" color="#f97316" />
         <StatCard onClick={() => pick('dead')} active={filter === 'dead'} label="إعلانات راكدة" value={K.counts.dead} icon="💤" color="#64748b" sub={K.deadValue ? `رأس مال راكد ${fmt(K.deadValue)}` : ''} />
         <StatCard onClick={() => pick('no_listing')} active={filter === 'no_listing'} label="أصناف بدون إعلان" value={K.counts.no_listing} icon="➕" color="#8b5cf6" />
-        <StatCard onClick={() => pick('stars')} active={filter === 'stars'} label="الأعلى مبيعاً ⭐" value={K.stars} icon="⭐" color="#10b981" sub="أعلى 10% من الإعلانات اللي باعت" />
+        <StatCard onClick={() => pick('stars')} active={filter === 'stars'} label="الأعلى مبيعاً ⭐" value={K.stars} icon="⭐" color="#10b981" sub="أعلى 10% من الإعلانات المبيعة" />
       </div>
 
       <ListingAlerts innerRef={alertsRef} />
@@ -163,7 +163,7 @@ export default function Listings() {
         <Card style={{ marginBottom: 16 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
             <b>💰 الأرباح ورسوم أمازون — آخر {days} يوم</b>
-            <span style={{ fontSize: 12, color: C.muted }}>{F.orders} سطر مبيعات · {F.refundCount} مرتجع{F.transfers ? ` · اتحوّل لحسابك ${fmt(F.transfers)} ${CUR}` : ''}</span>
+            <span style={{ fontSize: 12, color: C.muted }}>{F.orders} سطر مبيعات · {F.refundCount} مرتجع{F.transfers ? ` · المحوَّل إلى حسابك ${fmt(F.transfers)} ${CUR}` : ''}</span>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(150px,1fr))', gap: 10, marginBottom: 12 }}>
             {[['المبيعات', F.sales, '#6366f1'], ['رسوم أمازون', F.fees + F.general, '#ef4444', F.sales ? `${Math.round(-(F.fees + F.general) / F.sales * 100)}% من المبيعات` : ''], ['المرتجعات', F.refunds, '#f97316'], ['صافي من أمازون', F.net, '#8b5cf6'], ['تكلفة البضاعة', -F.cogs, '#64748b'], ['صافي الربح', F.profit, F.profit < 0 ? '#ef4444' : '#10b981', F.sales ? `هامش ${Math.round(F.profit / F.sales * 100)}%` : '']].map(([l, v, c, sub]) => (
@@ -177,18 +177,18 @@ export default function Listings() {
             <summary style={{ cursor: 'pointer', fontSize: 13, color: '#a5b4fc' }}>التفاصيل الكاملة</summary>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(280px,1fr))', gap: 20, marginTop: 10 }}>
               <FinLines f={F} />
-              {F.generalByType.length > 0 && <div><div style={{ fontSize: 12, color: C.muted, marginBottom: 4 }}>الرسوم العامة (مش على إعلان معيّن)</div>
+              {F.generalByType.length > 0 && <div><div style={{ fontSize: 12, color: C.muted, marginBottom: 4 }}>الرسوم العامة (غير مرتبطة بإعلان محدد)</div>
                 {F.generalByType.map(g => <div key={g.name} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, padding: '3px 0' }}><span style={{ color: C.sub }}>{g.name}</span><span style={{ color: '#f87171', direction: 'ltr' }}>{fmt(g.total)}</span></div>)}</div>}
             </div>
           </details>
-          {F.missingCost > 0 && <div style={{ fontSize: 12, color: '#f59e0b', marginTop: 8 }}>⚠ {F.missingCost} إعلان باع وصنفه مالوش سعر شراء — الربح بتاعه محسوب من غير تكلفة. حدّث الأسعار من الرصيد الافتتاحي.</div>}
+          {F.missingCost > 0 && <div style={{ fontSize: 12, color: '#f59e0b', marginTop: 8 }}>⚠ {F.missingCost} إعلان حقق مبيعات دون سعر شراء لصنفه — احتُسب ربحه دون تكلفة. يُرجى تحديث الأسعار من صفحة الرصيد الافتتاحي.</div>}
         </Card>); })()}
 
       {det && (
         <div onClick={() => setDet(null)} style={{ position: 'fixed', inset: 0, background: '#0008', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
           <div onClick={e => e.stopPropagation()} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 18, width: 420, maxWidth: '100%' }}>
             <div style={{ fontWeight: 800, marginBottom: 2 }}>{det.product?.name || det.name}</div>
-            <div style={{ fontSize: 11, color: C.muted, fontFamily: 'monospace', marginBottom: 10 }}>{det.sku} · باع {det.units} · مرتجع {det.refunded} · آخر {days} يوم</div>
+            <div style={{ fontSize: 11, color: C.muted, fontFamily: 'monospace', marginBottom: 10 }}>{det.sku} · المبيعات {det.units} · المرتجعات {det.refunded} · آخر {days} يوماً</div>
             <FinLines f={det.fin} />
             <button onClick={() => setDet(null)} style={{ marginTop: 12, width: '100%', padding: 8, borderRadius: 8, border: `1px solid ${C.border}`, background: 'transparent', color: C.sub, cursor: 'pointer' }}>إغلاق</button>
           </div>
@@ -197,7 +197,7 @@ export default function Listings() {
 
       {/* مركز الإجراءات */}
       <Card style={{ marginBottom: 16 }}>
-        <div style={{ fontWeight: 800, marginBottom: 4 }}>المطلوب منك ({focusCount})</div>
+        <div style={{ fontWeight: 800, marginBottom: 4 }}>الإجراءات المطلوبة ({focusCount})</div>
         <div style={{ fontSize: 12, color: C.muted, marginBottom: 12 }}>اضغط على أي بند لعرض إعلاناته.</div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(230px,1fr))', gap: 8 }}>
           {[...FOCUS, 'star', 'growing'].filter(k => K.counts[k]).map(k => (

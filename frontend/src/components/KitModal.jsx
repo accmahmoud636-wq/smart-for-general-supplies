@@ -34,7 +34,7 @@ export default function KitModal({ open, onClose, sku, map, products = [], onSav
   return (
     <Modal open={open} onClose={onClose} title="محتوى الإعلان" width={600}>
       <div style={{ fontSize: 13, color: C.sub, marginBottom: 12, lineHeight: 1.8 }}>
-        الإعلان <b dir="ltr" style={{ fontFamily: 'monospace', color: '#fbbf24' }}>{sku}</b> — حدّد الأصناف اللي بتخرج من المخزون لما يتباع <b>إعلان واحد</b>.
+        الإعلان <b dir="ltr" style={{ fontFamily: 'monospace', color: '#fbbf24' }}>{sku}</b> — حدّد الأصناف التي تُخصم من المخزون عند بيع <b>إعلان واحد</b>.
         مثال: «2 حجر» = حجر × 2، أو «حجر + ليفة» = صنفين × 1.
       </div>
       <div style={{ border: `1px solid ${C.border}`, borderRadius: 10, marginBottom: 12 }}>

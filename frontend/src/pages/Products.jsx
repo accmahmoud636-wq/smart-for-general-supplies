@@ -168,7 +168,7 @@ export default function Products() {
               {skus.map(x => (
                 <span key={x} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: '#f59e0b22', color: '#fbbf24', border: '1px solid #f59e0b44', borderRadius: 20, padding: '3px 6px 3px 10px', fontSize: 12, fontFamily: 'monospace' }}>
                   {x}{moveSkus.includes(x) && ' ↩'}<span style={{ color: '#a78bfa', fontFamily: 'inherit' }}>{kitLabel(x)}</span>
-                  {maps.some(m => m.sku === x && m.product === editing) && <button onClick={() => setKitSku(x)} title="محتوى الإعلان (كام قطعة / أصناف تانية معاه)" style={{ background: 'none', border: 'none', color: '#a78bfa', cursor: 'pointer', fontSize: 13, lineHeight: 1 }}>⚙</button>}
+                  {maps.some(m => m.sku === x && m.product === editing) && <button onClick={() => setKitSku(x)} title="محتوى الإعلان (عدد القطع / أصناف أخرى معه)" style={{ background: 'none', border: 'none', color: '#a78bfa', cursor: 'pointer', fontSize: 13, lineHeight: 1 }}>⚙</button>}
                   <button onClick={() => setSkus(skus.filter(y => y !== x))} style={{ background: 'none', border: 'none', color: '#f87171', cursor: 'pointer', fontSize: 14, lineHeight: 1 }}>×</button>
                 </span>
               ))}

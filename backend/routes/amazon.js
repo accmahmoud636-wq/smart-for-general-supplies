@@ -651,15 +651,15 @@ router.get('/reorder', auth, permit('amazon', 'amazon:read', 'products:read'), a
 // 7.5) الإعلانات: أداء كل SKU + الإجراء المطلوب
 // ═══════════════════════════════════════════════════════════════
 const LISTING_ACTIONS = {
-  restock:    { order: 0, label: 'زوّد الكمية',          color: '#ef4444' },
-  loss:       { order: 1, label: 'بيخسر — راجع السعر',    color: '#dc2626' },
+  restock:    { order: 0, label: 'إعادة طلب الكمية',          color: '#ef4444' },
+  loss:       { order: 1, label: 'خاسر — راجع السعر',    color: '#dc2626' },
   returns:    { order: 2, label: 'مرتجعات عالية',         color: '#f97316' },
-  unmapped:   { order: 3, label: 'اربطه بصنف',            color: '#f59e0b' },
-  declining:  { order: 4, label: 'مبيعاته بتقل',          color: '#eab308' },
-  dead:       { order: 5, label: 'راكد — حرّكه',           color: '#64748b' },
-  no_listing: { order: 6, label: 'اعمل له إعلان',          color: '#8b5cf6' },
-  star:       { order: 7, label: 'ناجح — حافظ عليه',       color: '#10b981' },
-  growing:    { order: 8, label: 'مبيعاته بتزيد',          color: '#22c55e' },
+  unmapped:   { order: 3, label: 'يلزم ربطه بصنف',            color: '#f59e0b' },
+  declining:  { order: 4, label: 'مبيعاته متراجعة',          color: '#eab308' },
+  dead:       { order: 5, label: 'راكد — يلزم تنشيطه',           color: '#64748b' },
+  no_listing: { order: 6, label: 'يلزم إنشاء إعلان',          color: '#8b5cf6' },
+  star:       { order: 7, label: 'ناجح — حافظ على توفره',       color: '#10b981' },
+  growing:    { order: 8, label: 'مبيعاته متزايدة',          color: '#22c55e' },
   ok:         { order: 9, label: 'مستقر',                 color: '#3b82f6' },
 };
 router.get('/listings', auth, permit('amazon', 'amazon:read'), async (req, res) => {
@@ -741,19 +741,19 @@ router.get('/listings', auth, permit('amazon', 'amazon:read'), async (req, res) 
       const trend = r.prevUnits ? Math.round((r.units - r.prevUnits) / r.prevUnits * 100) : (r.units ? null : 0);
       const last = lastSale[r.sku.toLowerCase()] || null;
       let action = 'ok', why = '';
-      if (!p) { action = 'unmapped'; why = 'الإعلان غير مربوط بصنف في المخزون — المبيعات مش بتخصم من الرصيد'; }
-      else if (r.units > 0 && neck && (neck.p.stock <= 0 || (daysLeft !== null && daysLeft <= LEAD))) { action = 'restock'; why = neck.p.stock <= 0 ? `الرصيد خلص${neckName} والإعلان بيبيع ${r.units} في ${days} يوم` : `الرصيد يكفي ${daysLeft} يوم بس${neckName} — اطلب ${suggestedQty} وحدة`; }
-      else if (profit !== null && profit < 0 && r.sold >= 2) { action = 'loss'; why = `صافي ${profit} بعد الرسوم والتكلفة — ارفع السعر أو راجع تكلفة الشراء`; }
-      else if (r.sold >= 3 && returnRate >= 15) { action = 'returns'; why = `${returnRate}% مرتجع — راجع الصور والوصف والجودة`; }
-      else if (r.prevUnits >= 3 && r.units <= r.prevUnits * 0.5) { action = 'declining'; why = `باع ${r.units} مقابل ${r.prevUnits} في الفترة اللي قبلها — راجع السعر والمنافسين${r.units === 0 ? '، واتأكد إن الإعلان شغال ومعاك الـ Buy Box' : ''}`; }
+      if (!p) { action = 'unmapped'; why = 'الإعلان غير مرتبط بصنف في المخزون — المبيعات لا تُخصم من الرصيد'; }
+      else if (r.units > 0 && neck && (neck.p.stock <= 0 || (daysLeft !== null && daysLeft <= LEAD))) { action = 'restock'; why = neck.p.stock <= 0 ? `نفد الرصيد${neckName} والإعلان باع ${r.units} خلال ${days} يوماً` : `الرصيد يكفي ${daysLeft} يوماً فقط${neckName} — يُقترح طلب ${suggestedQty} وحدة`; }
+      else if (profit !== null && profit < 0 && r.sold >= 2) { action = 'loss'; why = `الصافي ${profit} بعد الرسوم والتكلفة — يُنصح برفع السعر أو مراجعة تكلفة الشراء`; }
+      else if (r.sold >= 3 && returnRate >= 15) { action = 'returns'; why = `نسبة المرتجع ${returnRate}% — يُنصح بمراجعة الصور والوصف والجودة`; }
+      else if (r.prevUnits >= 3 && r.units <= r.prevUnits * 0.5) { action = 'declining'; why = `باع ${r.units} مقابل ${r.prevUnits} في الفترة السابقة — يُنصح بمراجعة السعر والمنافسين${r.units === 0 ? '، والتأكد من أن الإعلان نشط وأنك تملك الـ Buy Box' : ''}`; }
       // راكد: الصنف كله (بكل إعلاناته) مباعش — يظهر مرة واحدة للصنف
       else if (!productSells && p.stock > 0 && !deadSeen.has(String(p._id))) {
         deadSeen.add(String(p._id));
         const n = (prodListings[p._id] || []).length;
-        action = 'dead'; why = `مفيش مبيعات في ${days} يوم${n > 1 ? ` من ${n} إعلانات` : ''} ورصيده ${p.stock}${p.buyPrice ? ` (${r2(p.stock * p.buyPrice)} رأس مال)` : ''} — خفّض السعر أو اعمل عرض أو باندل`;
+        action = 'dead'; why = `لا توجد مبيعات خلال ${days} يوماً${n > 1 ? ` من ${n} إعلانات` : ''} ورصيده ${p.stock}${p.buyPrice ? ` (رأس مال ${r2(p.stock * p.buyPrice)})` : ''} — يُنصح بتخفيض السعر أو تقديم عرض أو حزمة`;
       }
-      else if (r.units > 0 && r.units >= topCut) { action = 'star'; why = 'من أعلى 10% مبيعاً — خلّي المخزون دايماً متاح وفكّر في إعلانات ممولة'; }
-      else if (r.prevUnits >= 2 && r.units >= r.prevUnits * 1.5) { action = 'growing'; why = `باع ${r.units} مقابل ${r.prevUnits} — الطلب بيزيد، تابع المخزون`; }
+      else if (r.units > 0 && r.units >= topCut) { action = 'star'; why = 'ضمن أعلى 10% مبيعاً — يُنصح بالحفاظ على توفر المخزون والنظر في الإعلانات الممولة'; }
+      else if (r.prevUnits >= 2 && r.units >= r.prevUnits * 1.5) { action = 'growing'; why = `باع ${r.units} مقابل ${r.prevUnits} — الطلب في ازدياد، يُنصح بمتابعة المخزون`; }
       return {
         sku: r.sku, asin: r.asin, name: r.name || p?.name || '', units: r.units, prevUnits: r.prevUnits, trend, revenue: r2(r.revenue),
         profit, margin: profit !== null && r.revenue ? r2(profit / r.revenue * 100) : null, returnRate, refunded: r.refunded, fin,
@@ -765,7 +765,7 @@ router.get('/listings', auth, permit('amazon', 'amazon:read'), async (req, res) 
     // أصناف عندها رصيد ومالهاش ولا إعلان
     const listed = new Set(Object.keys(prodListings));
     const noListing = products.filter(p => p.active !== false && p.stock > 0 && !listed.has(String(p._id)))
-      .map(p => ({ sku: '', name: p.name, units: 0, product: { _id: p._id, name: p.name, stock: p.stock, listings: 0 }, action: 'no_listing', why: `رصيده ${p.stock} ومالوش إعلان على أمازون — اعمل له إعلان أو اربطه بإعلان موجود`, value: r2(p.stock * (p.buyPrice || 0)) }));
+      .map(p => ({ sku: '', name: p.name, units: 0, product: { _id: p._id, name: p.name, stock: p.stock, listings: 0 }, action: 'no_listing', why: `رصيده ${p.stock} ولا يوجد له إعلان على أمازون — يُنصح بإنشاء إعلان أو ربطه بإعلان قائم`, value: r2(p.stock * (p.buyPrice || 0)) }));
 
     const all = [...out, ...noListing].sort((a, b) => LISTING_ACTIONS[a.action].order - LISTING_ACTIONS[b.action].order || b.units - a.units);
     const count = (a) => all.filter(r => r.action === a).length;

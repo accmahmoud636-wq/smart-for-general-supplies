@@ -483,7 +483,7 @@ export function Employees() {
   const load = () => api.get('/shipments/employees').then(r => setList(r.data)).catch(e => toast.error(err(e)));
   useEffect(() => { load(); if (isSuper) api.get('/users').then(r => setUsers(r.data)).catch(() => {}); }, []);
   const link = async (e, userId) => {
-    try { await api.put(`/shipments/employees/${e._id}`, { user: userId || '' }); toast.success(userId ? 'تم ربط الكارت بالحساب' : 'تم فك الربط'); load(); }
+    try { await api.put(`/shipments/employees/${e._id}`, { user: userId || '' }); toast.success(userId ? 'تم ربط البطاقة بالحساب' : 'تم فك الربط'); load(); }
     catch (x) { toast.error(err(x)); }
   };
 
@@ -506,15 +506,15 @@ export function Employees() {
             style={{ flex: 1, background: 'var(--bg)', border: `1px solid ${C.border}`, borderRadius: 8, padding: '10px 12px', color: C.text, fontSize: 14, outline: 'none' }} />
           <Btn onClick={add}>+ إضافة</Btn>
         </div>
-        <div style={{ fontSize: 12, color: C.muted, marginTop: 8 }}>يُخصَّص لكل موظف كارت باركود (EMP0001 …) يُستخدم لتسجيل الدخول — اربط الكارت بحساب الدخول الخاص بالموظف. الشحنات تُسجَّل تلقائياً باسم الموظف الداخل.</div>
+        <div style={{ fontSize: 12, color: C.muted, marginTop: 8 }}>تُخصَّص لكل موظف بطاقة باركود (EMP0001 …) تُستخدم لتسجيل الدخول — يُرجى ربط البطاقة بحساب الدخول الخاص بالموظف. الشحنات تُسجَّل تلقائياً باسم الموظف الداخل.</div>
       </Card>}
       <Card style={{ padding: 0 }}>
         <Table columns={[
           { key: 'name', title: 'الاسم', render: (v, r) => <span style={{ fontWeight: 700, opacity: r.active ? 1 : 0.5 }}>{v}</span> },
           { key: 'code', title: 'الكود', render: v => <span style={{ fontFamily: 'monospace' }}>{v}</span> },
-          { key: 'user', title: 'حساب الدخول بالكارت', render: (u, r) => isSuper ? (
+          { key: 'user', title: 'حساب الدخول بالبطاقة', render: (u, r) => isSuper ? (
             <select value={u?._id || ''} onChange={ev => link(r, ev.target.value)} style={{ background: 'var(--bg)', border: `1px solid ${u ? '#10b98166' : C.border}`, borderRadius: 8, padding: '6px 8px', color: C.text, fontSize: 12, maxWidth: 220 }}>
-              <option value="">— غير مربوط (لا يدخل بالكارت) —</option>
+              <option value="">— غير مرتبط (لا يدخل بالبطاقة) —</option>
               {users.map(x => <option key={x._id} value={x._id}>{x.name} — {x.email}</option>)}
             </select>
           ) : (u ? <span style={{ fontSize: 12 }}>{u.name}</span> : <span style={{ fontSize: 12, color: C.muted }}>غير مربوط</span>) },

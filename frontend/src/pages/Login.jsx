@@ -54,7 +54,7 @@ export default function Login() {
     <button type="button" onClick={() => setMode(k)} style={{ flex: 1, padding: '10px', borderRadius: 8, border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, background: mode === k ? 'linear-gradient(135deg,#6366f1,#8b5cf6)' : 'transparent', color: mode === k ? '#fff' : 'var(--sub)' }}><Ico size={18} stroke={1.8} />{label}</button>
   );
   const primaryBtn = { background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', border: 'none', borderRadius: 10, padding: 13, color: '#fff', fontWeight: 700, fontSize: 15, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 };
-  const FEATURES = [['📦', 'المخزون والجرد', 'أرصدة لحظية وتنبيهات النواقص'], ['📣', 'أمازون والإعلانات', 'الأرباح والرسوم وأداء كل إعلان'], ['🚚', 'الشحنات والتسليم', 'تجهيز ومطابقة مع تقارير أمازون'], ['📈', 'التقارير المالية', 'المبيعات والمصروفات وصافي الربح']];
+  const FEATURES = [['📦', 'المخزون والجرد', 'أرصدة لحظية وتنبيهات النواقص'], ['📣', 'أمازون والإعلانات', 'الأرباح والرسوم وأداء كل إعلان'], ['🚚', 'الشحنات والتسليم', 'التجهيز والمطابقة مع تقارير أمازون'], ['📈', 'التقارير المالية', 'المبيعات والمصروفات وصافي الربح']];
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg)', display: 'flex' }}>
@@ -68,8 +68,8 @@ export default function Login() {
             <div><div style={{ fontWeight: 800, fontSize: 18, letterSpacing: .5 }}>SMART FOR TRADING</div><div style={{ fontSize: 12, color: '#a5b4fc' }}>نظام الإدارة</div></div>
           </div>
           <div style={{ position: 'relative' }}>
-            <div style={{ fontSize: 30, fontWeight: 800, lineHeight: 1.4, marginBottom: 10, color: '#fff' }}>كل شغلك في مكان واحد</div>
-            <div style={{ fontSize: 14, color: '#c7d2fe', marginBottom: 30, lineHeight: 1.8 }}>المخزون والمبيعات وأمازون والشحنات — بأرقام لحظية</div>
+            <div style={{ fontSize: 30, fontWeight: 800, lineHeight: 1.4, marginBottom: 10, color: '#fff' }}>إدارة أعمالك في منصة واحدة</div>
+            <div style={{ fontSize: 14, color: '#c7d2fe', marginBottom: 30, lineHeight: 1.8 }}>المخزون والمبيعات وأمازون والشحنات — ببيانات محدّثة لحظياً</div>
             <div style={{ display: 'grid', gap: 16 }}>
               {FEATURES.map(([ic, t, d]) => (
                 <div key={t} style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
@@ -94,10 +94,10 @@ export default function Login() {
           )}
           <div style={{ marginBottom: 22 }}>
             <div style={{ fontWeight: 800, fontSize: 24, color: 'var(--text)' }}>تسجيل الدخول</div>
-            <div style={{ fontSize: 13, color: 'var(--sub)', marginTop: 4 }}>أهلاً بيك — اختار طريقة الدخول</div>
+            <div style={{ fontSize: 13, color: 'var(--sub)', marginTop: 4 }}>مرحباً بك — اختر طريقة تسجيل الدخول</div>
           </div>
           <div style={{ display: 'flex', gap: 6, background: 'var(--card)', border: '1px solid var(--border)', padding: 4, borderRadius: 10, marginBottom: 24 }}>
-            {tab('card', 'كارت الموظف', IconId)}
+            {tab('card', 'بطاقة الموظف', IconId)}
             {tab('email', 'البريد وكلمة المرور', IconMail)}
           </div>
 
@@ -105,7 +105,7 @@ export default function Login() {
             <div>
               <div style={{ border: '2px dashed #6366f166', borderRadius: 14, padding: '20px 16px 16px', textAlign: 'center', marginBottom: 14, background: '#6366f10a' }}>
                 <div style={{ color: '#818cf8', marginBottom: 8 }}><IconScan size={40} stroke={1.5} /></div>
-                <div style={{ fontSize: 13, color: 'var(--sub)', marginBottom: 12 }}>امسح كارت الموظف بالاسكانر أو كاميرا الموبايل</div>
+                <div style={{ fontSize: 13, color: 'var(--sub)', marginBottom: 12 }}>امسح بطاقة الموظف بالماسح الضوئي أو بكاميرا الهاتف</div>
                 <input ref={cardRef} value={code} onChange={e => onCardChange(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); clearTimeout(timer.current); submitCard(); } }} autoComplete="off"
                   placeholder="EMP0001" disabled={loading}
                   style={{ ...inp, fontSize: 22, textAlign: 'center', fontFamily: 'monospace', letterSpacing: 2, direction: 'ltr', border: '2px solid #6366f1', padding: '12px' }} />
@@ -116,7 +116,7 @@ export default function Login() {
                   {loading ? 'جاري الدخول...' : <><IconLogin2 size={18} stroke={1.9} />دخول</>}
                 </button>
               </div>
-              <CameraScanner open={cam} onClose={() => setCam(false)} onScan={(v) => { setCode(v); submitCard(v); }} title="امسح كارت الموظف" />
+              <CameraScanner open={cam} onClose={() => setCam(false)} onScan={(v) => { setCode(v); submitCard(v); }} title="امسح بطاقة الموظف" />
             </div>
           ) : (
             <form onSubmit={submit}>

@@ -7,7 +7,7 @@ import { C_THEME as C } from './UI';
 const KEY = 'erp_assistant_chat';
 const load = () => { try { return JSON.parse(sessionStorage.getItem(KEY)) || null; } catch { return null; } };
 const err = (e) => e.response?.data?.message || e.message || 'خطأ';
-const EXAMPLES = ['اشتريت 20 كنكة موكا بسعر 150 من المورد أحمد', 'كام الرصيد المتبقي من مخدة الظهر؟', 'إيه الأصناف اللي قربت تخلص؟', 'غيّر سعر بيع لمبة الأظافر لـ 165', 'سجّل مصروف 200 جنيه شنط تغليف'];
+const EXAMPLES = ['اشتريت 20 كنكة موكا بسعر 150 من المورد أحمد', 'ما الرصيد المتبقي من مخدة الظهر؟', 'ما الأصناف التي أوشكت على النفاد؟', 'غيّر سعر بيع لمبة الأظافر لـ 165', 'سجّل مصروف 200 جنيه شنط تغليف'];
 
 export default function Assistant() {
   const [enabled, setEnabled] = useState(false);

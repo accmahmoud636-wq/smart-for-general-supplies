@@ -10,7 +10,7 @@ const ICONS = [[/مطبخ|طبخ|اواني|أواني/, '🍳'], [/سيار|ع�
 const iconOf = (n) => (ICONS.find(([re]) => re.test(n)) || [, '🏷️'])[1];
 const STATUS = {
   engine:   { label: '⚡ محرّك نمو',      color: '#10b981' },
-  heavy:    { label: '🏋️ رأس مال تقيل',   color: '#f59e0b' },
+  heavy:    { label: '🏋️ رأس مال مرتفع',   color: '#f59e0b' },
   frozen:   { label: '🧊 متجمد',          color: '#64748b' },
   balanced: { label: '⚖️ متوازن',         color: '#3b82f6' },
   nodata:   { label: '○ بدون نشاط',       color: '#64748b' },
@@ -95,7 +95,7 @@ export default function CategoryBoard() {
                     <div style={{ color: C.muted, fontSize: 10 }}>قيمة المخزون</div><b>{fmt(r.value)}</b>
                   </div>
                   <div style={{ background: 'var(--bg)', borderRadius: 8, padding: '7px 9px' }}>
-                    <div style={{ color: C.muted, fontSize: 10 }}>مبيعات {d.days} يوم</div><b>{fmt(r.revenue)}</b> <span style={{ color: C.muted, fontSize: 10 }}>({r.soldUnits} وحدة · {r.sellThrough}% من الأصناف باعت)</span>
+                    <div style={{ color: C.muted, fontSize: 10 }}>مبيعات {d.days} يوم</div><b>{fmt(r.revenue)}</b> <span style={{ color: C.muted, fontSize: 10 }}>({r.soldUnits} وحدة · {r.sellThrough}% من الأصناف حققت مبيعات)</span>
                   </div>
                 </div>
 

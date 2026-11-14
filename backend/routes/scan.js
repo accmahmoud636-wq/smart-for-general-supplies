@@ -12,7 +12,7 @@ router.get('/order/:orderId', auth, permit('amazon', 'stock'), async (req, res) 
   try {
     const orderId = String(req.params.orderId).trim();
     const lines = await AmazonOrder.find({ orderId }).lean();
-    if (!lines.length) return res.status(404).json({ message: 'الطلب مش موجود — ارفع تقرير الطلبات الأول: ' + orderId });
+    if (!lines.length) return res.status(404).json({ message: 'الطلب غير موجود — يُرجى رفع تقرير الطلبات أولاً: ' + orderId });
     const { resolve } = await buildResolver();
     res.json({
       orderId,
@@ -32,8 +32,8 @@ router.post('/issue/amazon', auth, permit('amazon', 'stock'), async (req, res) =
   try {
     const { orderId, scanned = {} } = req.body;      // scanned: { productId: qty }
     const lines = await AmazonOrder.find({ orderId });
-    if (!lines.length) return res.status(404).json({ message: 'الطلب مش موجود' });
-    if (lines.some(l => l.sale)) return res.status(400).json({ message: 'الطلب ده خرج قبل كده' });
+    if (!lines.length) return res.status(404).json({ message: 'الطلب غير موجود' });
+    if (lines.some(l => l.sale)) return res.status(400).json({ message: 'تم إخراج هذا الطلب مسبقاً' });
     const active = lines.filter(l => l.stage !== 'cancelled');
     if (!active.length) return res.status(400).json({ message: 'الطلب ملغي' });
 
@@ -46,7 +46,7 @@ router.post('/issue/amazon', auth, permit('amazon', 'stock'), async (req, res) =
     }
     const ids = new Set([...Object.keys(need), ...Object.keys(scanned)]);
     const wrong = [...ids].filter(id => (need[id] || 0) !== (+scanned[id] || 0));
-    if (wrong.length) return res.status(400).json({ message: 'الممسوح مش مطابق للطلب', wrong });
+    if (wrong.length) return res.status(400).json({ message: 'الأصناف الممسوحة غير مطابقة للطلب', wrong });
 
     for (const l of active) if (l.stage === 'new' || l.stage === 'packed') l.stage = 'shipped';
     const r = await postOrderGroup(orderId, active, resolve, req.user._id);
@@ -61,9 +61,9 @@ router.post('/issue/amazon-new', auth, permit('amazon', 'stock'), async (req, re
     const orderId = String(req.body.orderId || '').trim();
     const { scanned = {}, prices = {} } = req.body;     // { productId: qty }, { productId: unitPrice }
     if (!orderId) return res.status(400).json({ message: 'رقم الطلب مطلوب' });
-    if (await AmazonOrder.exists({ orderId })) return res.status(400).json({ message: 'الطلب موجود بالفعل — امسحه تاني من الأول' });
+    if (await AmazonOrder.exists({ orderId })) return res.status(400).json({ message: 'الطلب موجود بالفعل — يُرجى مسحه مرة أخرى من البداية' });
     const ids = Object.keys(scanned).filter(id => +scanned[id] > 0);
-    if (!ids.length) return res.status(400).json({ message: 'امسح الأصناف الأول' });
+    if (!ids.length) return res.status(400).json({ message: 'يُرجى مسح الأصناف أولاً' });
     const prods = await Product.find({ _id: { $in: ids } }).lean();
     const lines = [];
     for (const p of prods) {
@@ -86,7 +86,7 @@ router.post('/issue/amazon-new', auth, permit('amazon', 'stock'), async (req, re
 router.post('/issue/manual', auth, permit('stock', 'amazon'), async (req, res) => {
   try {
     const { items = [], reason = 'صرف بالاسكانر' } = req.body;   // [{ product, qty }]
-    if (!items.length) return res.status(400).json({ message: 'مفيش أصناف' });
+    if (!items.length) return res.status(400).json({ message: 'لا توجد أصناف' });
     const ref = 'OUT-' + Date.now().toString(36).toUpperCase();
     const prods = await Product.find({ _id: { $in: items.map(i => i.product) } });
     const short = items.filter(i => { const p = prods.find(x => String(x._id) === String(i.product)); return !p || p.stock < i.qty; });

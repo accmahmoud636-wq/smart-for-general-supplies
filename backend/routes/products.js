@@ -251,7 +251,7 @@ prodRouter.post('/:id/adjust', auth, permit('stock'), async (req, res) => {
   try {
     const { qty, reason } = req.body;
     const product = await Product.findById(req.params.id);
-    if (product?.isKit) return res.status(400).json({ message: 'رصيد الصنف المركب بيتحسب من مكوناته — سوّي رصيد المكونات' });
+    if (product?.isKit) return res.status(400).json({ message: 'رصيد الصنف المركب يُحتسب من مكوناته — يُرجى تسوية رصيد المكونات' });
     const before = product.stock;
     const after = before + qty;
     product.stock = after;

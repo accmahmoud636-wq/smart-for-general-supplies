@@ -192,13 +192,13 @@ const TOOLS = {
       const p = await getProduct(input.productId);
       const lines = Object.entries(this.FIELDS).filter(([k]) => input[k] !== undefined && input[k] !== null).map(([k, l]) => `${l}: ${p[k] ?? '—'} ← ${input[k]}`);
       if (!lines.length) throw new Error('لا توجد تعديلات');
-      return { title: `تعديل كارت الصنف «${p.name}»`, lines };
+      return { title: `تعديل بطاقة الصنف «${p.name}»`, lines };
     },
     async exec(input) {
       const p = await getProduct(input.productId);
       for (const k of Object.keys(this.FIELDS)) if (input[k] !== undefined && input[k] !== null) p[k] = input[k];
       await p.save();
-      return `تم تعديل كارت الصنف «${p.name}»`;
+      return `تم تعديل بطاقة الصنف «${p.name}»`;
     }
   },
   set_stock: {
@@ -207,7 +207,7 @@ const TOOLS = {
     schema: { type: 'object', properties: { productId: { type: 'string' }, newStock: { type: 'number' }, reason: { type: 'string' } }, required: ['productId', 'newStock'] },
     async preview({ productId, newStock, reason }) {
       const p = await getProduct(productId);
-      if (p.isKit) throw new Error('رصيد الصنف المركب بيتحسب من مكوناته — سوّي رصيد المكونات');
+      if (p.isKit) throw new Error('رصيد الصنف المركب يُحتسب من مكوناته — يُرجى تسوية رصيد المكونات');
       if (!Number.isFinite(+newStock)) throw new Error('الرصيد غير صحيح');
       return { title: `تسوية رصيد «${p.name}»`, lines: [`الرصيد ${p.stock} ← ${newStock} (فرق ${newStock - p.stock > 0 ? '+' : ''}${newStock - p.stock})`, `السبب: ${reason || 'جرد'}`] };
     },

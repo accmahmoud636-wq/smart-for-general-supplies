@@ -32,12 +32,12 @@ router.post('/login-card', async (req, res) => {
   try {
     if (blocked(req)) return res.status(429).json(TOO_MANY);
     const code = require('../utils/kbd').fixLayout(req.body.code).toUpperCase();   // لو الكيبورد عربي وقت المسح
-    if (!code) return res.status(400).json({ message: 'امسح كارت الموظف' });
+    if (!code) return res.status(400).json({ message: 'يُرجى مسح بطاقة الموظف' });
     const { Employee } = require('../models/shipment');
     const emp = await Employee.findOne({ code, active: true });
     const user = emp?.user && await User.findById(emp.user);
-    if (!emp) { fail(req); return res.status(401).json({ message: 'الكارت غير معروف أو موقوف' }); }
-    if (!user) { fail(req); return res.status(401).json({ message: `كارت ${emp.name} غير مربوط بحساب دخول — اربطه من الإعدادات ← الموظفون` }); }
+    if (!emp) { fail(req); return res.status(401).json({ message: 'البطاقة غير معروفة أو موقوفة' }); }
+    if (!user) { fail(req); return res.status(401).json({ message: `بطاقة ${emp.name} غير مرتبطة بحساب دخول — يُرجى ربطها من الإعدادات ← الموظفون` }); }
     if (!user.active) return res.status(401).json({ message: 'الحساب غير نشط' });
     fails.delete(ipOf(req));
     await loginOk(res, user);

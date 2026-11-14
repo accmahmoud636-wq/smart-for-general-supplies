@@ -99,7 +99,7 @@ function UsersPerms() {
       <Card style={{ marginBottom: 14, fontSize: 13, color: C.sub, lineHeight: 1.9 }}>
         المستخدم هو من يسجّل الدخول إلى النظام بالبريد الإلكتروني وكلمة المرور. يحدد <b>الدور</b> الصلاحيات الافتراضية، ويمكن تخصيصها
         لكل صفحة: <Badge color="#64748b">ممنوع</Badge> <Badge color="#3b82f6">عرض فقط</Badge> <Badge color="#10b981">عرض وتعديل</Badge>.
-        <br />موظفو المستودع الذين يمسحون بطاقات الباركود في الشحنات يُداروا من تبويب «الموظفون» ولا يلزم أن يكونوا مستخدمين.
+        <br />موظفو المستودع الذين يمسحون بطاقات الباركود في الشحنات يُدارون من تبويب «الموظفون» ولا يلزم أن يكونوا مستخدمين.
       </Card>
       <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}><Btn onClick={openNew}>+ مستخدم جديد</Btn></div>
       <Card style={{ padding: 0 }}>
@@ -339,7 +339,7 @@ function DataTab() {
         <Card style={{ marginBottom: 14, padding: 0 }}>
           <div style={{ padding: 14, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
             <div>
-              <div style={{ fontWeight: 700 }}>{fileName} — {pv.total} صنف{pv.rawRows > pv.total && <span style={{ fontSize: 12, color: C.sub, fontWeight: 500 }}> (من {pv.rawRows} سطر — الأسطر المتكررة لنفس الصنف جُمعت في كارت واحد بكل رموز SKU)</span>} <Badge color="#10b981">{pv.newCount} جديد</Badge> <Badge color="#3b82f6">{pv.total - pv.newCount} للتحديث</Badge></div>
+              <div style={{ fontWeight: 700 }}>{fileName} — {pv.total} صنف{pv.rawRows > pv.total && <span style={{ fontSize: 12, color: C.sub, fontWeight: 500 }}> (من {pv.rawRows} سطر — دُمجت الأسطر المتكررة للصنف نفسه في بطاقة واحدة تتضمن جميع رموز SKU)</span>} <Badge color="#10b981">{pv.newCount} جديد</Badge> <Badge color="#3b82f6">{pv.total - pv.newCount} للتحديث</Badge></div>
               <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>الأعمدة المعتمدة: {pv.columns.map(c => COL_LABELS[c] || c).join('، ')}</div>
             </div>
             <div style={{ display: 'flex', gap: 8 }}>
@@ -595,14 +595,14 @@ function ActivityTab() {
 
   return (
     <div>
-      <div style={{ fontWeight: 800, marginBottom: 10 }}>المستخدمون <span style={{ fontSize: 13, color: '#10b981' }}>· {online} أونلاين الآن</span></div>
+      <div style={{ fontWeight: 800, marginBottom: 10 }}>المستخدمون <span style={{ fontSize: 13, color: '#10b981' }}>· {online} متصل الآن</span></div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(230px,1fr))', gap: 10, marginBottom: 18 }}>
         {users.map(u => (
           <div key={u._id} onClick={() => setSel(sel === u._id ? '' : u._id)} style={{ cursor: 'pointer', background: C.card, border: `1px solid ${sel === u._id ? '#6366f1' : C.border}`, borderRadius: 12, padding: 12, opacity: u.active ? 1 : 0.5 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <span style={{ width: 10, height: 10, borderRadius: 5, background: u.online ? '#10b981' : '#64748b', boxShadow: u.online ? '0 0 8px #10b981' : 'none', flexShrink: 0 }} />
               <b style={{ flex: 1, fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u.name}</b>
-              <span style={{ fontSize: 11, color: u.online ? '#10b981' : C.muted, fontWeight: 700 }}>{u.online ? 'أونلاين' : ago(u.lastSeen || u.lastLogin)}</span>
+              <span style={{ fontSize: 11, color: u.online ? '#10b981' : C.muted, fontWeight: 700 }}>{u.online ? 'متصل' : ago(u.lastSeen || u.lastLogin)}</span>
             </div>
             <div style={{ fontSize: 11, color: C.muted, marginTop: 6 }}>{u.lastAction ? <>آخر عملية: <span style={{ color: C.sub }}>{u.lastAction.action}</span> · {ago(u.lastAction.at)}</> : 'لا يوجد نشاط مسجّل'}</div>
           </div>
@@ -625,7 +625,7 @@ function ActivityTab() {
           </div>
         ))}
       </Card>
-      <div style={{ fontSize: 11, color: C.muted, marginTop: 8 }}>يُحتفظ بالسجل 90 يوماً. «أونلاين» = المنصة مفتوحة عنده خلال آخر دقيقتين.</div>
+      <div style={{ fontSize: 11, color: C.muted, marginTop: 8 }}>يُحتفظ بالسجل 90 يوماً. «متصل» = المنصة مفتوحة لدى المستخدم خلال آخر دقيقتين.</div>
     </div>
   );
 }

@@ -97,7 +97,7 @@ export default function Seasons() {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: 10, marginTop: 10 }}>
             <input style={inp} placeholder="اسم الموسم (مثال: عروض 11.11)" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
             <input style={inp} type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} />
-            <input style={inp} type="number" min="1" max="120" placeholder="التذكير قبلها بكام يوم" value={form.lead} onChange={e => setForm({ ...form, lead: e.target.value })} />
+            <input style={inp} type="number" min="1" max="120" placeholder="مدة التذكير قبل الموسم (بالأيام)" value={form.lead} onChange={e => setForm({ ...form, lead: e.target.value })} />
             <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: C.sub }}><input type="checkbox" checked={form.yearly} onChange={e => setForm({ ...form, yearly: e.target.checked })} /> يتكرر كل سنة</label>
           </div>
           <textarea style={{ ...inp, width: '100%', boxSizing: 'border-box', marginTop: 10, minHeight: 70 }} placeholder="أفكار المنتجات — كل فكرة في سطر" value={form.ideas} onChange={e => setForm({ ...form, ideas: e.target.value })} />

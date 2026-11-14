@@ -115,14 +115,14 @@ router.get('/categories', auth, async (req, res) => {
       // التشخيص: مقارنة نصيب القسم من المبيعات بنصيبه من رأس المال
       let status = 'balanced', insight = '';
       if (!T.revenue) { status = 'nodata'; insight = 'ارفع تقرير الطلبات لعرض أداء القسم'; }
-      else if (!T.value) { insight = x.revenue ? `${salesShare.toFixed(0)}% من المبيعات — أضف أسعار الشراء لمقارنة رأس المال` : `مفيش مبيعات في ${days} يوم`; status = x.revenue ? 'balanced' : 'frozen'; }
-      else if (!x.revenue && !x.units) { status = 'nodata'; insight = `مفيش رصيد ولا مبيعات في ${days} يوم — قرر: تشتري للقسم ولا تقفله`; }
-      else if (!x.revenue && x.value > 0) { status = 'frozen'; insight = `مفيش مبيعات في ${days} يوم — ${Math.round(x.value).toLocaleString('en')} رأس مال متجمد`; }
-      else if (salesShare >= Math.max(valueShare, 1) * 1.5) { status = 'engine'; insight = `بيجيب ${salesShare.toFixed(0)}% من المبيعات بـ ${valueShare.toFixed(0)}% بس من رأس المال — كبّر القسم وزوّد أصنافه`; }
-      else if (valueShare >= 5 && salesShare <= valueShare * 0.5) { status = 'heavy'; insight = `شايل ${valueShare.toFixed(0)}% من رأس المال ومبيعاته ${salesShare.toFixed(0)}% بس — خفّض الشراء وصفّي الراكد`; }
+      else if (!T.value) { insight = x.revenue ? `${salesShare.toFixed(0)}% من المبيعات — أضف أسعار الشراء لمقارنة رأس المال` : `لا توجد مبيعات خلال ${days} يوماً`; status = x.revenue ? 'balanced' : 'frozen'; }
+      else if (!x.revenue && !x.units) { status = 'nodata'; insight = `لا يوجد رصيد ولا مبيعات خلال ${days} يوماً — يلزم اتخاذ قرار بالشراء للقسم أو إغلاقه`; }
+      else if (!x.revenue && x.value > 0) { status = 'frozen'; insight = `لا توجد مبيعات خلال ${days} يوماً — رأس مال مجمّد بقيمة ${Math.round(x.value).toLocaleString('en')}`; }
+      else if (salesShare >= Math.max(valueShare, 1) * 1.5) { status = 'engine'; insight = `يحقق ${salesShare.toFixed(0)}% من المبيعات بـ ${valueShare.toFixed(0)}% فقط من رأس المال — يُنصح بتوسيع القسم وزيادة أصنافه`; }
+      else if (valueShare >= 5 && salesShare <= valueShare * 0.5) { status = 'heavy'; insight = `يستحوذ على ${valueShare.toFixed(0)}% من رأس المال ومبيعاته ${salesShare.toFixed(0)}% فقط — يُنصح بتقليل الشراء وتصفية الراكد`; }
       else insight = 'أداء متوازن مع حجمه في المخزون';
       const alerts = [];
-      if (x.outSelling) alerts.push(`${x.outSelling} صنف بيبيع ورصيده خلص`);
+      if (x.outSelling) alerts.push(`${x.outSelling} صنف عليه طلب ونفد رصيده`);
       if (x.low) alerts.push(`${x.low} تحت حد الطلب`);
       if (x.noCost) alerts.push(`${x.noCost} بدون سعر شراء`);
       return {
@@ -140,14 +140,14 @@ router.get('/categories', auth, async (req, res) => {
       const top = [...rows].sort((a, b) => b.revenue - a.revenue)[0];
       if (top?.revenue && rows.length > 1) headlines.push({ icon: '🏆', text: `«${top.name}» أكبر قسم مبيعاً: ${top.salesShare.toFixed(0)}% من الإيراد` });
       const engines = rows.length > 1 ? rows.filter(r => r.status === 'engine') : [];
-      if (engines.length) headlines.push({ icon: '⚡', text: `أقسام بتبيع أكتر من حجمها: ${engines.map(r => r.name).join('، ')} — فرصة للتوسع` });
+      if (engines.length) headlines.push({ icon: '⚡', text: `أقسام تحقق مبيعات تفوق حجمها: ${engines.map(r => r.name).join('، ')} — فرصة للتوسع` });
       const top3 = [...rows].sort((a, b) => b.revenue - a.revenue).slice(0, 3).reduce((t, r) => t + r.salesShare, 0);
-      if (rows.length > 3 && top3 >= 75) headlines.push({ icon: '⚖️', text: `${top3.toFixed(0)}% من مبيعاتك من 3 أقسام بس — نوّع عشان تقلل المخاطرة` });
+      if (rows.length > 3 && top3 >= 75) headlines.push({ icon: '⚖️', text: `${top3.toFixed(0)}% من مبيعاتك من 3 أقسام فقط — يُنصح بالتنويع لتقليل المخاطر` });
     }
     const frozen = [...rows].sort((a, b) => b.deadValue - a.deadValue)[0];
-    if (frozen?.deadValue > 0) headlines.push({ icon: '🧊', text: `أكبر رأس مال راكد في «${frozen.name}»: ${Math.round(frozen.deadValue).toLocaleString('en')} في أصناف ماباعتش` });
+    if (frozen?.deadValue > 0) headlines.push({ icon: '🧊', text: `أكبر رأس مال راكد في «${frozen.name}»: ${Math.round(frozen.deadValue).toLocaleString('en')} في أصناف لم تحقق مبيعات` });
     const noCost = rows.reduce((t, r) => t + (r.alerts.find(a => a.includes('بدون سعر شراء')) ? parseInt(r.alerts.find(a => a.includes('بدون سعر شراء'))) : 0), 0);
-    if (noCost) headlines.push({ icon: '🏷️', text: `${noCost} صنف بدون سعر شراء — قيمة المخزون والربحية مش دقيقة لحد ما تكملهم` });
+    if (noCost) headlines.push({ icon: '🏷️', text: `${noCost} صنف بدون سعر شراء — قيمة المخزون والربحية غير دقيقة حتى استكمالها` });
 
     res.json({ days, rows, totals: { ...T, value: r2(T.value), revenue: r2(T.revenue), deadValue: r2(T.deadValue), categories: rows.length }, headlines });
   } catch (e) { res.status(500).json({ message: e.message }); }
