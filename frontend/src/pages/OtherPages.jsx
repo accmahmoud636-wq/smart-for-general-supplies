@@ -27,7 +27,7 @@ export function Categories() {
   ];
   return (
     <div>
-      <PageHeader title="الفئات" icon="🏷️" actions={can('categories') && [<Btn key="a" onClick={openNew}>+ إضافة</Btn>]} />
+      <PageHeader title="الفئات" icon="🔷" actions={can('categories') && [<Btn key="a" onClick={openNew}>+ إضافة</Btn>]} />
       <Card><Table columns={cols} data={items} /></Card>
       <Modal open={modal} onClose={() => setModal(false)} title={editing ? 'تعديل' : 'إضافة فئة'} width={400}>
         <Input label="الاسم" value={form.name} onChange={v => setForm({...form,name:v})} required />
@@ -206,47 +206,6 @@ export function StockPage() {
 // USERS
 // ═══════════════════════════════════════════════════════════
 const ROLE_COLORS2 = { superadmin:'#f59e0b', admin:'#6366f1', accountant:'#10b981', inventory:'#3b82f6', sales:'#ec4899', viewer:'#64748b' };
-export function Users() {
-  const { user: me, can } = useAuth();
-  const [items, setItems] = useState([]); const [roles, setRoles] = useState([]);
-  const [modal, setModal] = useState(false); const [editing, setEditing] = useState(null);
-  const [form, setForm] = useState({ name:'', email:'', password:'', role:'viewer', active:true });
-  const load = () => { api.get('/users').then(r => setItems(r.data)).catch(()=>toast.error('غير مصرح')); api.get('/users/roles').then(r=>setRoles(r.data)); };
-  useEffect(() => { load(); }, []);
-  const openNew = () => { setEditing(null); setForm({ name:'', email:'', password:'', role:'viewer', active:true }); setModal(true); };
-  const openEdit = (u) => { setEditing(u._id); setForm({ name:u.name, email:u.email, password:'', role:u.role, active:u.active }); setModal(true); };
-  const save = async () => { try { const d = {...form}; if(!d.password) delete d.password; if(editing) await api.put(`/users/${editing}`,d); else await api.post('/users',d); toast.success('تم'); setModal(false); load(); } catch(e){ toast.error(e.response?.data?.message||'خطأ'); } };
-  const del = async (id) => { if(!confirm('حذف المستخدم؟')) return; try{ await api.delete(`/users/${id}`); toast.success('تم'); load(); }catch(e){ toast.error(e.response?.data?.message||'خطأ'); } };
-  const cols = [
-    { key:'name', title:'الاسم', render:(v,r)=><div><div style={{fontWeight:600}}>{v}{r._id===me?._id&&' (أنت)'}</div><div style={{fontSize:11,color:'var(--muted)'}}>{r.email}</div></div> },
-    { key:'role', title:'الدور', render:(v,r)=><Badge color={ROLE_COLORS2[v]}>{r.roleLabel||v}</Badge> },
-    { key:'active', title:'الحالة', render:v=><Badge color={v?'#10b981':'#ef4444'}>{v?'نشط':'معطل'}</Badge> },
-    { key:'lastLogin', title:'آخر دخول', render:v=>fmtDate(v) },
-    { key:'_id', title:'إجراءات', render:(_,r)=><div style={{display:'flex',gap:6}}>
-      <Btn size="sm" variant="ghost" onClick={()=>openEdit(r)}>✏️</Btn>
-      {me?.role==='superadmin' && r._id!==me._id && <Btn size="sm" variant="danger" onClick={()=>del(r._id)}>🗑️</Btn>}
-    </div> }
-  ];
-  if (!can('all')) return <div style={{textAlign:'center',padding:80,color:'var(--muted)'}}>🔒 غير مصرح بالوصول</div>;
-  return (
-    <div>
-      <PageHeader title="إدارة المستخدمين" icon="👤" actions={[<Btn key="a" onClick={openNew}>+ مستخدم جديد</Btn>]} />
-      <Card><Table columns={cols} data={items} /></Card>
-      <Modal open={modal} onClose={()=>setModal(false)} title={editing?'تعديل مستخدم':'مستخدم جديد'} width={460}>
-        <Input label="الاسم الكامل" value={form.name} onChange={v=>setForm({...form,name:v})} required />
-        <Input label="البريد الإلكتروني" type="email" value={form.email} onChange={v=>setForm({...form,email:v})} required />
-        <Input label={editing?'كلمة المرور الجديدة (اتركها فارغة للإبقاء)':'كلمة المرور'} type="password" value={form.password} onChange={v=>setForm({...form,password:v})} required={!editing} />
-        <Select label="الدور" value={form.role} onChange={v=>setForm({...form,role:v})} options={roles.map(r=>({value:r.key,label:r.label}))} />
-        <Select label="الحالة" value={form.active?'true':'false'} onChange={v=>setForm({...form,active:v==='true'})} options={[{value:'true',label:'نشط'},{value:'false',label:'معطل'}]} />
-        <div style={{display:'flex',gap:8,justifyContent:'flex-end'}}><Btn variant="ghost" onClick={()=>setModal(false)}>إلغاء</Btn><Btn onClick={save}>💾 حفظ</Btn></div>
-      </Modal>
-    </div>
-  );
-}
-
-// ═══════════════════════════════════════════════════════════
-// REPORTS
-// ═══════════════════════════════════════════════════════════
 export function Reports() {
   const kind = useLocation().pathname.endsWith('/inventory') ? 'inventory' : 'finance';
   const [from, setFrom] = useState(''); const [to, setTo] = useState('');
@@ -262,7 +221,7 @@ export function Reports() {
   useEffect(()=>{ load(); },[]);
   return (
     <div>
-      <PageHeader title={kind === 'inventory' ? 'تقارير المخزون' : 'التقارير المالية'} icon={kind === 'inventory' ? '📦' : '📈'} />
+      <PageHeader title={kind === 'inventory' ? 'تقارير المخزون' : 'التقارير المالية'} icon={kind === 'inventory' ? '📊' : '📈'} />
       <Card style={{marginBottom:16}}>
         <div style={{display:'flex',gap:12,alignItems:'flex-end',flexWrap:'wrap'}}>
           <div><label style={{fontSize:12,color:'var(--sub)',display:'block',marginBottom:5,fontWeight:600}}>من تاريخ</label><input type="date" value={from} onChange={e=>setFrom(e.target.value)} style={{background:'var(--bg)',border:'1px solid var(--border)',borderRadius:8,padding:'8px 12px',color:'var(--text)',fontSize:14,outline:'none'}} /></div>

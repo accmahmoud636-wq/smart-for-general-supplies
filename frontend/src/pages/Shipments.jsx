@@ -65,7 +65,7 @@ function ShipmentList({ onNew, onOpen, initialFilter = '' }) {
 
   return (
     <div>
-      <PageHeader title="الشحنات والتسليم" icon="📦" actions={[
+      <PageHeader title="الشحنات والتسليم" icon="🚚" actions={[
         <Btn key="new" onClick={onNew}>+ شحنة جديدة</Btn>
       ]} />
       <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
@@ -223,8 +223,8 @@ function ShipmentEditor({ id: initialId, onBack, onPosted }) {
   const damagedQty = items.filter(i => i.type === 'return' && i.dest === 'damaged').reduce((s, i) => s + i.qty, 0);
 
   return (
-    <div style={{ maxWidth: 960 }}>
-      <PageHeader title={no ? `شحنة ${no}` : 'شحنة جديدة'} icon="📦" actions={[
+    <div>
+      <PageHeader title={no ? `شحنة ${no}` : 'شحنة جديدة'} icon="🚚" subtitle="امسح باركود الأصناف ثم احفظ الشحنة أو رحّلها" actions={[
         <Btn key="b" variant="ghost" onClick={back}>رجوع</Btn>
       ]} />
 
@@ -496,7 +496,7 @@ export function Employees() {
   const printCards = (emps) => printLabels(emps.map(e => ({ name: e.name, barcode: e.code, copies: 1 })), '50x25', { showName: true });
 
   return (
-    <div style={{ maxWidth: 760 }}>
+    <div>
       <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
         <Btn variant="ghost" onClick={() => printCards(list.filter(e => e.active))}>طباعة جميع البطاقات</Btn>
       </div>

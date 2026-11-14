@@ -125,7 +125,7 @@ export default function Products() {
 
   return (
     <div>
-      <PageHeader title="المنتجات" icon="📦" actions={[
+      <PageHeader title="المنتجات" icon="🏷️" actions={[
         can('products') && <Btn key="imp" variant="ghost" onClick={() => window.location.assign('/settings?tab=data')}>استيراد من Excel</Btn>,
         <Btn key="lbl" variant="ghost" onClick={() => setLabels({})}>طباعة الباركود</Btn>,
         can('products') && <Btn key="gen" variant="ghost" onClick={generateAll}>توليد الباركود</Btn>,

@@ -1,9 +1,8 @@
 import { useState, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, Navigate } from 'react-router-dom';
 import api from '../utils/api';
 import { Card, Btn, Badge, Input, Modal, Table, PageHeader, fmtDate, C_THEME as C, ACCENTS, BASES, THEME, THEME_KEY, themeColors } from '../components/UI';
 import { Employees } from './Shipments';
-import { StockCount, OpeningBalance } from './Inventory';
 import { readReportFile } from '../utils/parseReport';
 import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
@@ -13,34 +12,37 @@ const TABS = [
   ['users', 'المستخدمون والصلاحيات', 'all'],
   ['theme', 'المظهر', 'settings:read'],
   ['data', 'إدارة البيانات', 'products'],
-  ['count', 'جرد المخزون', 'stock:read'],
-  ['opening', 'الرصيد الافتتاحي', 'stock'],
   ['assistant', 'المساعد الذكي', 'all'],
   ['activity', 'المتصلون والسجل', 'all'],
 ];
 const err = (e) => e.response?.data?.message || e.message || 'خطأ';
 
+// كل تبويب ليه عنصر في القائمة الجانبية — العنوان والأيقونة والوصف حسب التبويب
+const TAB_META = {
+  employees: ['الموظفون', '👤', 'بيانات الموظفين وبطاقات الدخول بالباركود'],
+  users:     ['المستخدمون والصلاحيات', '🔐', 'حسابات الدخول وأدوار المستخدمين وصلاحياتهم'],
+  theme:     ['المظهر', '🎨', 'ألوان النظام واسم الشركة والعملة'],
+  data:      ['إدارة البيانات', '🗂️', 'استيراد الأصناف والنسخ الاحتياطي وحذف البيانات'],
+  assistant: ['المساعد الذكي', '✨', 'إعداد المساعد الذي ينفّذ الأوامر المكتوبة'],
+  activity:  ['المتصلون والسجل', '🟢', 'المستخدمون المتصلون الآن وسجل العمليات'],
+};
 export default function Settings() {
   const { can, user } = useAuth();
   const [sp, setSp] = useSearchParams();
+  // الجرد والرصيد الافتتاحي اتنقلوا لقسم المخزون
+  if (sp.get('tab') === 'count') return <Navigate to="/inventory/count" replace />;
+  if (sp.get('tab') === 'opening') return <Navigate to="/inventory/opening" replace />;
   const tabs = TABS.filter(([, , p]) => can(p) || user?.role === 'superadmin');
   const tab = tabs.some(t => t[0] === sp.get('tab')) ? sp.get('tab') : tabs[0]?.[0];
   if (!tab) return <div style={{ textAlign: 'center', padding: 80, color: C.muted }}>ليس لديك صلاحية الوصول إلى هذه الصفحة</div>;
 
   return (
     <div>
-      <PageHeader title="الإعدادات" icon="⚙️" />
-      <div style={{ display: 'flex', gap: 4, borderBottom: `1px solid ${C.border}`, marginBottom: 18, overflowX: 'auto' }}>
-        {tabs.map(([k, label]) => (
-          <button key={k} onClick={() => setSp({ tab: k })} style={{ background: 'none', border: 'none', borderBottom: `2px solid ${tab === k ? C.accent : 'transparent'}`, color: tab === k ? C.accentLight : C.sub, padding: '10px 14px', cursor: 'pointer', fontWeight: tab === k ? 700 : 500, fontSize: 14, whiteSpace: 'nowrap' }}>{label}</button>
-        ))}
-      </div>
+      <PageHeader title={TAB_META[tab]?.[0] || 'الإعدادات'} icon={TAB_META[tab]?.[1] || '⚙️'} subtitle={TAB_META[tab]?.[2]} />
       {tab === 'employees' && <Employees />}
       {tab === 'users' && <UsersPerms />}
       {tab === 'theme' && <Theme />}
       {tab === 'data' && <DataTab />}
-      {tab === 'count' && <StockCount />}
-      {tab === 'opening' && <OpeningBalance />}
       {tab === 'assistant' && <AssistantTab />}
       {tab === 'activity' && <ActivityTab />}
     </div>
@@ -199,7 +201,7 @@ function Theme() {
   );
 
   return (
-    <div style={{ maxWidth: 820 }}>
+    <div>
       <Card style={{ marginBottom: 14 }}>
         <div style={{ fontWeight: 700, marginBottom: 12 }}>بيانات النظام</div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 12px' }}>
@@ -319,7 +321,7 @@ function DataTab() {
   };
 
   return (
-    <div style={{ maxWidth: 1000 }}>
+    <div>
       <Card style={{ marginBottom: 14 }}>
         <div style={{ fontWeight: 800, fontSize: 16, marginBottom: 6 }}>استيراد الأصناف من Excel</div>
         <div style={{ fontSize: 13, color: C.sub, lineHeight: 1.9, marginBottom: 12 }}>
@@ -431,7 +433,7 @@ function AssistantTab() {
   if (!cfg) return <div style={{ padding: 30, color: C.muted }}>⏳</div>;
   const u = cfg.usage;
   return (
-    <div style={{ maxWidth: 720 }}>
+    <div>
       <Card style={{ marginBottom: 14, fontSize: 13, color: C.sub, lineHeight: 1.9 }}>
         المساعد الذكي يعمل من زر <b>✨</b> أسفل الشاشة في كل الصفحات: تكتب أو تتحدث بأمر مثل «اشتريت 20 كنكة بسعر 150» فيجهّز العملية ويعرضها عليك، ولا يُنفّذ أي تعديل إلا بعد ضغط «تأكيد».
         يلتزم بصلاحيات كل مستخدم. يعمل عبر Claude من Anthropic ويحتاج مفتاح API من <a href="https://console.anthropic.com" target="_blank" rel="noreferrer" style={{ color: C.accentLight }}>console.anthropic.com</a> برصيد مشحون.

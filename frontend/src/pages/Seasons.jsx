@@ -84,7 +84,7 @@ export default function Seasons() {
   const inp = { background: 'var(--bg)', border: `1px solid ${C.border}`, borderRadius: 8, padding: '9px 10px', color: C.text, fontSize: 13, outline: 'none', fontFamily: 'inherit' };
 
   return (
-    <div style={{ maxWidth: 980 }}>
+    <div>
       <PageHeader title="المواسم" icon="🗓️" actions={edit ? [<Btn key="a" onClick={() => setForm(form ? null : { name: '', date: '', lead: 30, ideas: '', yearly: true })}>{form ? 'إلغاء' : '+ موسم خاص'}</Btn>] : []} />
       <Card style={{ marginBottom: 14, fontSize: 13, color: C.sub, lineHeight: 1.9 }}>
         يظهر تذكير أعلى الشاشة قبل كل موسم بـ 30 يوماً مع عدّ تنازلي يومي، ومعه أفكار المنتجات وموعد تجهيز المخزون.

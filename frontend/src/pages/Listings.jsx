@@ -125,7 +125,7 @@ export default function Listings() {
 
   return (
     <div>
-      <PageHeader title="الإعلانات" icon="📣" actions={[
+      <PageHeader title="الإعلانات والأرباح" icon="📣" actions={[
         <label key="u" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', color: '#fff', borderRadius: 8, padding: '8px 14px', fontWeight: 700, cursor: busy ? 'wait' : 'pointer', fontSize: 13 }}>
           {busy ? '⏳ جارٍ الرفع...' : '⬆ رفع تقرير (معاملات أو طلبات)'}
           <input type="file" accept=".txt,.csv,.tsv,.xlsx,.xls" style={{ display: 'none' }} disabled={busy} onChange={e => { upload(e.target.files[0]); e.target.value = ''; }} />

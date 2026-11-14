@@ -11,43 +11,44 @@ import { SeasonBanner } from '../pages/Seasons';
 // الشريط الجانبي: أقسام بالترتيب اللي بيتشغّل بيه الشغل كل يوم
 const SECTIONS = [
   { title: null, items: [
-    { path: '/',            icon: '🏠', label: 'الرئيسية',           perm: null },
-    { path: '/seasons',     icon: '🗓️', label: 'المواسم',            perm: null },
+    { path: '/',                       icon: '🏠', label: 'الرئيسية',               perm: null },
+    { path: '/seasons',                icon: '🗓️', label: 'المواسم',                perm: null },
   ] },
-  { title: 'العمليات', items: [
-    { path: '/shipments',   icon: '📦', label: 'الشحنات والتسليم',   perm: 'shipments:read' },
-    { path: '/customers',   icon: '🏪', label: 'العملاء',            perm: 'customers:read' },
+  { title: 'المبيعات والشحن', items: [
+    { path: '/shipments',              icon: '🚚', label: 'الشحنات والتسليم',       perm: 'shipments:read' },
+    { path: '/amazon?tab=orders',      icon: '🛒', label: 'طلبات أمازون',           perm: 'amazon:read' },
+    { path: '/sales',                  icon: '💳', label: 'فواتير المبيعات',        perm: 'sales:read' },
+    { path: '/customers',              icon: '🏪', label: 'العملاء',                perm: 'customers:read' },
   ] },
-  { title: 'مركز أمازون', items: [
-    { path: '/amazon?tab=overview', icon: '🛒', label: 'نظرة عامة',       perm: 'amazon:read' },
-    { path: '/listings',    icon: '📣', label: 'الإعلانات',            perm: 'amazon:read' },
-    { path: '/amazon?tab=profit',   icon: '💰', label: 'ربحية المنتجات',   perm: 'amazon:read' },
-    { path: '/amazon?tab=recon',    icon: '🏦', label: 'التسويات والدفعات', perm: 'amazon:read' },
+  { title: 'أمازون', items: [
+    { path: '/listings',               icon: '📣', label: 'الإعلانات والأرباح',      perm: 'amazon:read' },
+    { path: '/amazon?tab=recon',       icon: '🏦', label: 'التسويات والدفعات',      perm: 'amazon:read' },
+    { path: '/amazon?tab=skus',        icon: '🔗', label: 'ربط رموز SKU',           perm: 'products' },
   ] },
   { title: 'المخزون', items: [
-    { path: '/products',    icon: '🏷️', label: 'المنتجات',           perm: 'products:read' },
-    { path: '/amazon?tab=skus',    icon: '🔗', label: 'ربط رموز SKU',  perm: 'products' },
-    { path: '/stock',       icon: '📋', label: 'حركة المخزون',       perm: 'stock:read' },
-    { path: '/damaged',     icon: '⚠️', label: 'مخزن التوالف',        perm: 'stock:read' },
-    { path: '/amazon?tab=reorder', icon: '🔄', label: 'إعادة الطلب',     perm: 'amazon:read' },
-    { path: '/purchases',   icon: '📥', label: 'فواتير الشراء',      perm: 'purchases:read' },
-    { path: '/suppliers',   icon: '🏭', label: 'الموردون',           perm: 'suppliers:read' },
-    { path: '/reports/inventory', icon: '📦', label: 'تقارير المخزون', perm: 'reports:read' },
+    { path: '/products',               icon: '🏷️', label: 'المنتجات',               perm: 'products:read' },
+    { path: '/amazon?tab=reorder',     icon: '🔄', label: 'إعادة الطلب',            perm: 'amazon:read' },
+    { path: '/inventory/count',        icon: '🧮', label: 'جرد المخزون',            perm: 'stock:read' },
+    { path: '/inventory/opening',      icon: '🗃️', label: 'الرصيد الافتتاحي',       perm: 'stock' },
+    { path: '/stock',                  icon: '📋', label: 'حركة المخزون',           perm: 'stock:read' },
+    { path: '/damaged',                icon: '⚠️', label: 'مخزن التوالف',           perm: 'stock:read' },
   ] },
-  { title: 'الحسابات', items: [
-    { path: '/sales',       icon: '💳', label: 'فواتير البيع',       perm: 'sales:read' },
-    { path: '/expenses',    icon: '💸', label: 'المصروفات',          perm: 'expenses:read' },
-    { path: '/reports',     icon: '📈', label: 'التقارير المالية',    perm: 'reports:read' },
+  { title: 'المشتريات', items: [
+    { path: '/purchases',              icon: '🛍️', label: 'فواتير الشراء',          perm: 'purchases:read' },
+    { path: '/suppliers',              icon: '🏭', label: 'الموردون',               perm: 'suppliers:read' },
+  ] },
+  { title: 'الحسابات والتقارير', items: [
+    { path: '/expenses',               icon: '💸', label: 'المصروفات',              perm: 'expenses:read' },
+    { path: '/reports',                icon: '📈', label: 'التقارير المالية',        perm: 'reports:read' },
+    { path: '/reports/inventory',      icon: '📊', label: 'تقارير المخزون',         perm: 'reports:read' },
   ] },
   { title: 'الإعدادات', items: [
-    { path: '/settings?tab=employees', icon: '👤', label: 'الموظفون',          perm: 'settings:read' },
-    { path: '/settings?tab=data',      icon: '🗂️', label: 'إدارة البيانات',      perm: 'products' },
-    { path: '/settings?tab=count',     icon: '🧮', label: 'جرد المخزون',        perm: 'stock:read' },
-    { path: '/settings?tab=opening',   icon: '📥', label: 'الرصيد الافتتاحي',    perm: 'stock' },
-    { path: '/settings?tab=users',     icon: '🔐', label: 'المستخدمون والصلاحيات', perm: 'all' },
-    { path: '/settings?tab=theme',     icon: '🎨', label: 'المظهر',    perm: 'settings:read' },
-    { path: '/settings?tab=assistant', icon: '✨', label: 'المساعد الذكي', perm: 'all' },
-    { path: '/settings?tab=activity',  icon: '🟢', label: 'المتصلون والسجل', perm: 'all' },
+    { path: '/settings?tab=employees', icon: '👤', label: 'الموظفون',               perm: 'settings:read' },
+    { path: '/settings?tab=users',     icon: '🔐', label: 'المستخدمون والصلاحيات',  perm: 'all' },
+    { path: '/settings?tab=data',      icon: '🗂️', label: 'إدارة البيانات',         perm: 'products' },
+    { path: '/settings?tab=theme',     icon: '🎨', label: 'المظهر',                 perm: 'settings:read' },
+    { path: '/settings?tab=assistant', icon: '✨', label: 'المساعد الذكي',          perm: 'all' },
+    { path: '/settings?tab=activity',  icon: '🟢', label: 'المتصلون والسجل',        perm: 'all' },
   ] },
 ];
 
@@ -86,7 +87,7 @@ export default function Layout({ children }) {
   const roleColor = ROLE_COLORS[user?.role] || '#64748b';
   const here = loc.pathname + loc.search;
   const isActive = (path) => {
-    if (path.includes('?')) return here === path || (path.endsWith('tab=overview') && here === '/amazon') || (path.endsWith('tab=employees') && here === '/settings');
+    if (path.includes('?')) return here === path || (path.endsWith('tab=orders') && here === '/amazon') || (path.endsWith('tab=employees') && here === '/settings');
     return loc.pathname === path;
   };
   const allowed = (perm) => !perm || can(perm) || user?.role === 'superadmin';

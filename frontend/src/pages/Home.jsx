@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import api from '../utils/api';
-import { Card, Btn, fmt, fmtDate, C_THEME as C, THEME } from '../components/UI';
+import { Card, Btn, fmt, fmtDate, C_THEME as C, THEME , PageHeader } from '../components/UI';
 
 const CUR = THEME.currency || 'ج.م';
 import { useAuth } from '../context/AuthContext';
@@ -43,17 +43,13 @@ export default function Home() {
   const open = tasks.filter(t => t.n > 0);
 
   return (
-    <div style={{ maxWidth: 1100 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 18 }}>
-        <div>
-          <div style={{ fontSize: 22, fontWeight: 800 }}>{hello}، {user?.name?.split(' ')[0]}</div>
-          <div style={{ fontSize: 13, color: C.muted, marginTop: 2 }}>{new Date().toLocaleDateString('ar-EG', { weekday: 'long', day: 'numeric', month: 'long' })}</div>
-        </div>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          {can('shipments') && <Btn size="lg" onClick={() => nav('/shipments?new=1')}>+ شحنة جديدة</Btn>}
-          {can('shipments:read') && <Btn size="lg" variant="ghost" onClick={() => nav('/shipments')}>سجل الشحنات</Btn>}
-        </div>
-      </div>
+    <div>
+      <PageHeader title={`${hello}، ${user?.name?.split(' ')[0] || ''}`} icon="🏠"
+        subtitle={new Date().toLocaleDateString('ar-EG', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+        actions={<>
+          {can('shipments:read') && <Btn variant="ghost" onClick={() => nav('/shipments')}>سجل الشحنات</Btn>}
+          {can('shipments') && <Btn onClick={() => nav('/shipments?new=1')}>+ شحنة جديدة</Btn>}
+        </>} />
 
       {/* شغل النهارده */}
       <div style={{ fontWeight: 800, fontSize: 15, marginBottom: 10 }}>المهام المعلّقة</div>

@@ -51,7 +51,7 @@ export default function Damaged() {
   const list = d.list.filter(r => filter === 'all' ? true : filter === 'open' ? ['pending', 'claimed'].includes(r.status) : r.status === filter);
 
   return (
-    <div style={{ maxWidth: 1000 }}>
+    <div>
       <PageHeader title="مخزن التوالف" icon="⚠️" />
       <Card style={{ marginBottom: 14, fontSize: 13, color: C.sub, lineHeight: 1.9 }}>
         المرتجع التالف يُحدَّد من شاشة الشحنة قبل الترحيل، ولا يُضاف إلى المخزون الرئيسي. لكل سجل قرار واحد:

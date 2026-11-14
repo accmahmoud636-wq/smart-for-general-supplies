@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, Navigate } from 'react-router-dom';
 import api from '../utils/api';
 import { Card, Btn, Badge, Input, Table, PageHeader, StatCard, fmt, fmtDate, C_THEME as C, THEME } from '../components/UI';
 import toast from 'react-hot-toast';
@@ -37,13 +37,12 @@ const LEVELS = {
   slow:   { label: 'بدون مبيعات', color: 'var(--muted)' },
 };
 
+// كل تبويب صفحة مستقلة في القائمة الجانبية — العنوان والأيقونة حسب التبويب
 const TABS = [
-  ['overview', 'نظرة عامة'],
-  ['orders', 'الطلبات'],
-  ['profit', 'ربحية المنتجات'],
-  ['recon', 'التسويات'],
-  ['reorder', 'إعادة الطلب'],
-  ['skus', 'ربط رموز SKU'],
+  ['orders', 'طلبات أمازون', '🛒'],
+  ['recon', 'التسويات والدفعات', '🏦'],
+  ['skus', 'ربط رموز SKU', '🔗'],
+  ['reorder', 'إعادة الطلب', '🔄'],
 ];
 
 function DateFilter({ value, onChange }) {
@@ -76,33 +75,29 @@ export default function AmazonHub() {
   const { can } = useAuth();
   const canEdit = can('amazon');
   const [sp, setSp] = useSearchParams();
-  const tab = sp.get('tab') || 'overview';
-  const setTab = (t) => setSp({ tab: t });
+  const raw = sp.get('tab') || 'orders';
+  // الصفحات المدمجة: «نظرة عامة» ← الرئيسية، «ربحية المنتجات» ← الإعلانات والأرباح
+  const tab = TABS.some(t => t[0] === raw) ? raw : 'orders';
+  const cur = TABS.find(t => t[0] === tab);
   const [summary, setSummary] = useState(null);
   const loadSummary = () => api.get('/amazon/summary').then(r => setSummary(r.data)).catch(() => {});
   useEffect(() => { loadSummary(); }, []);
   const st = summary?.stages || {};
+  if (raw === 'overview') return <Navigate to="/" replace />;
+  if (raw === 'profit') return <Navigate to="/listings" replace />;
 
   return (
     <div>
-      <PageHeader title="مركز أمازون" icon="🛒" />
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(170px,1fr))', gap: 12, marginBottom: 18 }}>
+      <PageHeader title={cur[1]} icon={cur[2]} />
+      {tab === 'orders' && <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(170px,1fr))', gap: 12, marginBottom: 18 }}>
         <StatCard label="طلبات جديدة" value={st.new || 0} icon="🆕" color="#3b82f6" />
         <StatCard label="جاهزة للشحن" value={st.packed || 0} icon="📦" color="#8b5cf6" />
         <StatCard label="تم الشحن" value={st.shipped || 0} icon="🚚" color="#f59e0b" />
         <StatCard label="بانتظار الترحيل" value={summary?.toPost || 0} icon="🧾" color="#ec4899" sub="طلبات مشحونة دون فاتورة" />
         <StatCard label="آخر تقرير معاملات" value={summary?.lastTxDate ? fmtDate(summary.lastTxDate) : '—'} icon="📅" color="#10b981" />
-      </div>
+      </div>}
 
-      <div style={{ display: 'flex', gap: 4, borderBottom: `1px solid ${C.border}`, marginBottom: 18, overflowX: 'auto' }}>
-        {TABS.map(([k, label]) => (
-          <button key={k} onClick={() => setTab(k)} style={{ background: 'none', border: 'none', borderBottom: `2px solid ${tab === k ? C.accent : 'transparent'}`, color: tab === k ? '#818cf8' : C.sub, padding: '10px 14px', cursor: 'pointer', fontWeight: tab === k ? 700 : 500, fontSize: 14, whiteSpace: 'nowrap' }}>{label}</button>
-        ))}
-      </div>
-
-      {tab === 'overview' && <OverviewTab go={setTab} />}
       {tab === 'orders' && <OrdersTab canEdit={canEdit} onChange={loadSummary} />}
-      {tab === 'profit' && <ProfitTab />}
       {tab === 'recon' && <ReconTab />}
       {tab === 'reorder' && <ReorderTab />}
       {tab === 'skus' && <SkusTab canEdit={canEdit} />}
@@ -191,44 +186,6 @@ function OrdersTab({ canEdit, onChange }) {
         </Card>
       )}
       <Card style={{ padding: 0 }}><Table columns={cols} data={data.orders} onRow={canEdit ? r => toggle(r._id) : undefined} /></Card>
-    </div>
-  );
-}
-
-// ═══ الربحية ═════════════════════════════════════════════════
-function ProfitTab() {
-  const [range, setRange] = useState({ from: '', to: '' });
-  const [data, setData] = useState(null);
-  useEffect(() => { api.get('/amazon/profitability', { params: range }).then(r => setData(r.data)).catch(() => toast.error('تعذّر تحميل البيانات')); }, [range.from, range.to]);
-  if (!data) return <div style={{ textAlign: 'center', padding: 40, color: C.muted }}>⏳</div>;
-  const t = data.totals;
-
-  const cols = [
-    { key: 'sku', title: 'SKU / الصنف', render: (v, r) => <div><div style={{ fontWeight: 600 }}>{v}</div><div style={{ fontSize: 11, color: r.product ? C.muted : '#f87171' }}>{r.product?.name || 'غير مربوط'}</div></div> },
-    { key: 'netUnits', title: 'صافي الوحدات', render: (v, r) => <span>{v}{r.unitsRefunded > 0 && <span style={{ color: '#f87171', fontSize: 11 }}> (مرتجع {r.unitsRefunded})</span>}</span> },
-    { key: 'sales', title: 'المبيعات', render: money },
-    { key: 'refunds', title: 'المرتجعات', render: money },
-    { key: 'fees', title: 'رسوم أمازون', render: (v, r) => <span>{money(v)} <span style={{ fontSize: 11, color: C.muted }}>{r.feePct}%</span></span> },
-    { key: 'net', title: 'الصافي من أمازون', render: money },
-    { key: 'unitCost', title: 'تكلفة الوحدة', render: v => v ? fmt(v) : <Badge color="#f59e0b">التكلفة غير مسجّلة</Badge> },
-    { key: 'cogs', title: 'تكلفة البضاعة', render: money },
-    { key: 'profit', title: 'صافي الربح', render: v => <span style={{ color: v >= 0 ? '#10b981' : '#f87171', fontWeight: 800 }}>{fmt(v)}</span> },
-    { key: 'profitPerUnit', title: 'ربح الوحدة', render: money },
-    { key: 'margin', title: 'الهامش', render: v => <Badge color={v >= 20 ? '#10b981' : v >= 0 ? '#f59e0b' : '#ef4444'}>{v}%</Badge> },
-  ];
-
-  return (
-    <div>
-      <DateFilter value={range} onChange={setRange} />
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(170px,1fr))', gap: 12, marginBottom: 14 }}>
-        <StatCard label="المبيعات" value={fmt(t.sales)} icon="💵" color="#3b82f6" sub={`${t.units} وحدة — ${CUR}`} />
-        <StatCard label="رسوم أمازون" value={fmt(t.fees)} icon="🏷️" color="#f59e0b" sub={t.sales ? `${(Math.abs(t.fees) / t.sales * 100).toFixed(1)}% من المبيعات` : ''} />
-        <StatCard label="تكلفة البضاعة" value={fmt(t.cogs)} icon="📦" color="#8b5cf6" />
-        <StatCard label="رسوم عامة (اشتراك وإعلانات)" value={fmt(t.generalFees)} icon="📣" color="#ec4899" />
-        <StatCard label="صافي الربح النهائي" value={fmt(t.finalProfit)} icon="📈" color={t.finalProfit >= 0 ? '#10b981' : '#ef4444'} sub={`المحوَّل إلى الحساب البنكي: ${fmt(Math.abs(t.transfers))}`} />
-      </div>
-      {t.missingCost > 0 && <Card style={{ marginBottom: 14, borderColor: '#f59e0b55', color: '#f59e0b', fontSize: 13 }}>{t.missingCost} صنف دون سعر شراء أو غير مرتبط، وقد احتُسب ربحه دون تكلفة. يُرجى استكمال سعر الشراء أو ربط رمز SKU.</Card>}
-      <Card style={{ padding: 0 }}><Table columns={cols} data={data.rows} /></Card>
     </div>
   );
 }
@@ -380,93 +337,6 @@ function SkusTab({ canEdit }) {
       <Card style={{ padding: 0 }}><Table columns={cols} data={list.map(s => ({ ...s, _id: s.sku }))} /></Card>
       <KitModal open={!!kit} onClose={() => setKit(null)} sku={kit} products={products} onSaved={load}
         map={kit && (mapOf(kit) || (() => { const r = list.find(x => x.sku === kit); return r?.product ? { product: r.product._id, qty: 1, components: [] } : null; })())} />
-    </div>
-  );
-}
-
-// ═══ نظرة عامة ═══════════════════════════════════════════════
-function OverviewTab({ go }) {
-  const [d, setD] = useState(null);
-  useEffect(() => { api.get('/amazon/overview').then(r => setD(r.data)).catch(() => toast.error('تعذّر تحميل البيانات')); }, []);
-  if (!d) return <div style={{ textAlign: 'center', padding: 40, color: C.muted }}>⏳</div>;
-  const P = ({ title, v, color }) => (
-    <Card style={{ padding: 16 }}>
-      <div style={{ fontSize: 12, color: C.muted, marginBottom: 8 }}>{title}</div>
-      <div style={{ fontSize: 22, fontWeight: 800, color }}>{fmt(v.sales)} <span style={{ fontSize: 12, color: C.muted }}>{CUR}</span></div>
-      <div style={{ fontSize: 12, color: C.sub, marginTop: 4 }}>{v.orders} طلب · {v.units} وحدة</div>
-    </Card>
-  );
-  const shortCount = d.pendingOrders.filter(o => o.short).length;
-
-  return (
-    <div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(200px,1fr))', gap: 12, marginBottom: 14 }}>
-        <P title="مبيعات اليوم" v={d.today} color="#10b981" />
-        <P title="آخر 7 أيام" v={d.week} color="#3b82f6" />
-        <P title="آخر 30 يوماً" v={d.month} color="#8b5cf6" />
-        <StatCard label="قيمة المخزون (بالتكلفة)" value={fmt(d.stockValue)} icon="📦" color="#f59e0b" sub={`${d.productsCount} صنف`} />
-      </div>
-
-      <Card style={{ marginBottom: 14 }}>
-        <div style={{ fontWeight: 700, marginBottom: 10 }}>المبيعات اليومية — آخر 30 يوماً</div>
-        <ResponsiveContainer width="100%" height={220}>
-          <BarChart data={d.daily}>
-            <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
-            <XAxis dataKey="date" stroke={C.muted} fontSize={10} />
-            <YAxis stroke={C.muted} fontSize={10} />
-            <Tooltip contentStyle={{ background: C.card, border: `1px solid ${C.border}`, color: C.text }} formatter={(v, n) => [n === 'sales' ? fmt(v) + ' ' + CUR : v, n === 'sales' ? 'المبيعات' : 'الوحدات']} />
-            <Bar dataKey="sales" fill="#6366f1" radius={[4, 4, 0, 0]} />
-          </BarChart>
-        </ResponsiveContainer>
-      </Card>
-
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(340px,1fr))', gap: 14 }}>
-        <Card>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10 }}>
-            <span style={{ fontWeight: 700 }}>طلبات بانتظار الشحن ({d.pendingOrders.length})</span>
-            <a onClick={() => go('orders')} style={{ color: '#818cf8', cursor: 'pointer', fontSize: 12 }}>جميع الطلبات ←</a>
-          </div>
-          {shortCount > 0 && <div style={{ color: '#f87171', fontSize: 12, marginBottom: 8 }}>{shortCount} طلب لا يغطيه الرصيد المتاح</div>}
-          {d.pendingOrders.length === 0 && <div style={{ color: C.muted, fontSize: 13 }}>لا توجد طلبات بانتظار الشحن</div>}
-          {d.pendingOrders.slice(0, 12).map(o => (
-            <div key={o.orderId} style={{ padding: '8px 0', borderBottom: `1px solid ${C.border}33`, fontSize: 13 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
-                <span style={{ fontFamily: 'monospace', fontSize: 12 }}>{o.orderId}</span>
-                <span>{o.short && <Badge color="#ef4444">رصيد غير كافٍ</Badge>} <Badge color={STAGES[o.stage].color}>{STAGES[o.stage].label}</Badge></span>
-              </div>
-              <div style={{ fontSize: 12, color: C.sub, marginTop: 2 }}>{o.items.map(i => `${i.name} ×${i.qty}`).join(' · ')} — {fmtDate(o.date)}</div>
-            </div>
-          ))}
-        </Card>
-
-        <Card>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10 }}>
-            <span style={{ fontWeight: 700 }}>أصناف نفدت أو تحت حد الطلب ({d.lowStock.length})</span>
-            <a onClick={() => go('reorder')} style={{ color: '#818cf8', cursor: 'pointer', fontSize: 12 }}>إعادة الطلب ←</a>
-          </div>
-          {d.lowStock.length === 0 && <div style={{ color: C.muted, fontSize: 13 }}>المخزون ضمن المستوى المطلوب</div>}
-          {d.lowStock.slice(0, 12).map(p => (
-            <div key={p._id} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: `1px solid ${C.border}33`, fontSize: 13 }}>
-              <span>{p.name}</span>
-              <span>
-                <b style={{ color: p.stock <= 0 ? '#f87171' : '#fbbf24' }}>{p.stock <= 0 ? 'نفد' : `الرصيد ${p.stock}`}</b>
-                {p.daysLeft !== null && p.stock > 0 && <span style={{ color: C.muted, fontSize: 11 }}> · يغطي {p.daysLeft} يوماً</span>}
-              </span>
-            </div>
-          ))}
-        </Card>
-
-        <Card style={{ gridColumn: '1/-1' }}>
-          <div style={{ fontWeight: 700, marginBottom: 10 }}>الأصناف الأكثر مبيعاً — آخر 30 يوماً (إجمالي جميع إعلانات الصنف)</div>
-          <Table columns={[
-            { key: 'name', title: 'الصنف', render: (v, r) => <span style={{ fontWeight: 600, color: r.mapped ? C.text : '#f87171' }}>{v}{!r.mapped && ' (غير مربوط)'}</span> },
-            { key: 'skus', title: 'الإعلانات (SKU)', render: v => <span style={{ fontSize: 11, color: C.sub }}>{v.length > 1 ? <Badge color="#8b5cf6">{v.length} إعلانات</Badge> : null} {v.join('، ')}</span> },
-            { key: 'units', title: 'الوحدات المباعة' },
-            { key: 'sales', title: `المبيعات (${CUR})`, render: money },
-            { key: 'stock', title: 'المخزون', render: v => v ?? '—' },
-          ]} data={d.topProducts.map((t, i) => ({ ...t, _id: i }))} />
-        </Card>
-      </div>
     </div>
   );
 }

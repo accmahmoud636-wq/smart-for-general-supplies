@@ -1,4 +1,5 @@
 import { Tile } from './Icon';
+import { IconDeviceFloppy, IconTrash, IconPencil, IconPlus, IconCamera, IconSearch, IconDownload, IconUpload, IconTag, IconVolume, IconX, IconCopy, IconPrinter, IconArrowRight, IconCheck, IconBarcode, IconHistory, IconSend, IconExternalLink, IconEraser } from '@tabler/icons-react';
 // ─── Shared UI Components ────────────────────────────────────────────────────
 // ─── المظهر ─────────────────────────────────────────────────────
 export const ACCENTS = {
@@ -46,18 +47,36 @@ export function Card({ children, style = {} }) {
   return <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 20, ...style }}>{children}</div>;
 }
 
-export function Btn({ children, onClick, variant = 'primary', size = 'md', disabled = false, style = {} }) {
+// أيقونة الزرار: من الرمز في أوله أو من أول كلمة — كل الأزرار بنفس نمط الأيقونات
+const BTN_EMOJI = { '💾': IconDeviceFloppy, '🗑️': IconTrash, '🗑': IconTrash, '✏️': IconPencil, '+': IconPlus, '➕': IconPlus, '📷': IconCamera, '🔍': IconSearch,
+  '⬇': IconDownload, '📤': IconUpload, '⬆': IconUpload, '🏷️': IconTag, '🔊': IconVolume, '✖': IconX, '✕': IconX, '📋': IconCopy, '🖨️': IconPrinter, '→': IconArrowRight, '📥': IconDownload, '✓': IconCheck };
+const BTN_WORD = [[/^حفظ/, IconDeviceFloppy], [/^حذف/, IconTrash], [/^تعديل/, IconPencil], [/^طباعة/, IconPrinter], [/^رجوع/, IconArrowRight], [/^توليد/, IconBarcode],
+  [/^تنزيل/, IconDownload], [/^رفع/, IconUpload], [/^سجل/, IconHistory], [/^ترحيل/, IconSend], [/^تأكيد/, IconCheck], [/^فتح/, IconExternalLink], [/^مسح/, IconEraser]];
+function withIcon(children, size) {
+  const arr = Array.isArray(children) ? [...children] : [children];
+  const first = arr[0];
+  if (typeof first !== 'string') return children;
+  const t = first.trimStart();
+  let Ico = null, rest = t;
+  for (const [k, I] of Object.entries(BTN_EMOJI)) if (t.startsWith(k)) { Ico = I; rest = t.slice(k.length).replace(/^\uFE0F/, '').trimStart(); break; }
+  if (!Ico) { const w = BTN_WORD.find(([re]) => re.test(t)); if (w) Ico = w[1]; }
+  if (!Ico) return children;
+  arr[0] = rest;
+  return <><Ico size={size} stroke={1.9} style={{ flexShrink: 0 }} />{arr}</>;
+}
+
+export function Btn({ children, onClick, variant = 'primary', size = 'md', disabled = false, style = {}, title }) {
   const variants = {
-    primary: { background: `linear-gradient(135deg,${C.accent},${C.accent2})`, color: '#fff', border: 'none' },
-    success: { background: 'linear-gradient(135deg,#10b981,#059669)', color: '#fff', border: 'none' },
-    danger:  { background: 'linear-gradient(135deg,#ef4444,#dc2626)', color: '#fff', border: 'none' },
+    primary: { background: `linear-gradient(135deg,${C.accent},${C.accent2})`, color: '#fff', border: '1px solid transparent' },
+    success: { background: 'linear-gradient(135deg,#10b981,#059669)', color: '#fff', border: '1px solid transparent' },
+    danger:  { background: 'linear-gradient(135deg,#ef4444,#dc2626)', color: '#fff', border: '1px solid transparent' },
     ghost:   { background: 'transparent', color: C.sub, border: `1px solid ${C.border}` },
-    warning: { background: 'linear-gradient(135deg,#f59e0b,#d97706)', color: '#fff', border: 'none' },
+    warning: { background: 'linear-gradient(135deg,#f59e0b,#d97706)', color: '#fff', border: '1px solid transparent' },
   };
-  const sizes = { sm: { padding: '5px 12px', fontSize: 12 }, md: { padding: '8px 16px', fontSize: 14 }, lg: { padding: '11px 22px', fontSize: 15 } };
+  const sizes = { sm: { padding: '5px 11px', fontSize: 12, gap: 5 }, md: { padding: '8px 16px', fontSize: 14, gap: 7 }, lg: { padding: '11px 22px', fontSize: 15, gap: 8 } };
   return (
-    <button onClick={onClick} disabled={disabled} style={{ ...variants[variant], ...sizes[size], borderRadius: 8, cursor: disabled ? 'not-allowed' : 'pointer', fontWeight: 600, opacity: disabled ? 0.6 : 1, transition: 'opacity .2s', ...style }}>
-      {children}
+    <button onClick={onClick} disabled={disabled} title={title} style={{ ...variants[variant], ...sizes[size], display: 'inline-flex', alignItems: 'center', justifyContent: 'center', borderRadius: 8, cursor: disabled ? 'not-allowed' : 'pointer', fontWeight: 600, opacity: disabled ? 0.6 : 1, transition: 'opacity .2s, filter .2s', whiteSpace: 'nowrap', ...style }}>
+      {withIcon(children, size === 'sm' ? 15 : 17)}
     </button>
   );
 }
@@ -151,14 +170,43 @@ export function StatCard({ label, value, icon, color = '#6366f1', sub, onClick, 
   );
 }
 
-export function PageHeader({ title, icon, actions }) {
+// رأس الصفحة الموحّد: أيقونة + عنوان + وصف قصير + أزرار الإجراءات
+const PAGE_SUBTITLES = {
+  'الرئيسية': 'ملخص الأداء والمهام المطلوبة اليوم',
+  'المواسم': 'التذكير بالمواسم وتجهيز المخزون قبلها',
+  'الشحنات والتسليم': 'تجهيز الشحنات وتسليمها لأمازون ومطابقتها بالتقارير',
+  'طلبات أمازون': 'متابعة طلبات أمازون من الاستلام حتى الشحن',
+  'فواتير المبيعات': 'فواتير البيع المباشر وخصمها من المخزون',
+  'العملاء': 'المنصات والعملاء الذين تُسلَّم لهم الشحنات',
+  'الإعلانات والأرباح': 'أداء كل إعلان والأرباح ورسوم أمازون والإجراءات المطلوبة',
+  'التسويات والدفعات': 'معاملات أمازون والمبالغ المحوّلة إلى حسابك',
+  'ربط رموز SKU': 'ربط إعلانات أمازون بأصناف المخزون',
+  'إعادة الطلب': 'الأصناف المطلوب شراؤها والكميات المقترحة',
+  'المنتجات': 'بطاقات الأصناف والأسعار والأرصدة',
+  'جرد المخزون': 'مطابقة الرصيد الفعلي بالنظام وتسوية الفروقات',
+  'الرصيد الافتتاحي': 'تسجيل الكميات وتكلفة الوحدة لكل صنف',
+  'حركة المخزون': 'سجل كل حركات الإضافة والخصم والتسوية',
+  'مخزن التوالف': 'المرتجعات التالفة وقرارات التعامل معها',
+  'فواتير الشراء': 'المشتريات من الموردين — تُحدّث التكلفة بالمتوسط المرجح',
+  'الموردون': 'بيانات الموردين وأرصدتهم',
+  'المصروفات': 'تسجيل ومتابعة المصروفات التشغيلية',
+  'التقارير المالية': 'الإيرادات والتكاليف وصافي الربح',
+  'تقارير المخزون': 'قيمة المخزون والأرصدة والنواقص',
+  'الإعدادات': 'المستخدمون والصلاحيات والبيانات والمظهر',
+  'الفئات': 'تصنيف الأصناف إلى أقسام',
+};
+export function PageHeader({ title, icon, actions, subtitle }) {
+  const sub = subtitle ?? PAGE_SUBTITLES[title];
   return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, gap: 10, flexWrap: 'wrap' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        {icon && <Tile icon={icon} size={36} />}
-        <span style={{ fontWeight: 800, fontSize: 20 }}>{title}</span>
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 22, paddingBottom: 16, borderBottom: `1px solid ${C.border}`, gap: 12, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
+        {icon && <Tile icon={icon} size={42} />}
+        <div style={{ minWidth: 0 }}>
+          <h1 style={{ margin: 0, fontWeight: 800, fontSize: 21, lineHeight: 1.3, color: 'var(--text)' }}>{title}</h1>
+          {sub && <div style={{ fontSize: 13, color: C.muted, marginTop: 2 }}>{sub}</div>}
+        </div>
       </div>
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>{actions}</div>
+      {actions && <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>{actions}</div>}
     </div>
   );
 }

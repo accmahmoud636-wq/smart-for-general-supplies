@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import api from '../utils/api';
 import toast from 'react-hot-toast';
-import { Card, Btn, Badge, Table, fmt, fmtDate, THEME, C_THEME as C } from '../components/UI';
+import { Card, Btn, Badge, Table, PageHeader, fmt, fmtDate, THEME, C_THEME as C } from '../components/UI';
 import ProductPicker, { normAr } from '../components/ProductPicker';
 import { beep } from '../utils/barcode';
 import { useAuth } from '../context/AuthContext';
@@ -23,10 +23,7 @@ function CountList({ onOpen }) {
   useEffect(() => { api.get('/inventory').then(r => setList(r.data)).catch(e => toast.error(err(e))); }, []);
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-        <b>جرد المخزون</b>
-        {can('stock') && <Btn onClick={() => onOpen('new')}>+ جرد جديد</Btn>}
-      </div>
+      <PageHeader title="جرد المخزون" icon="🧮" actions={can('stock') && <Btn onClick={() => onOpen('new')}>+ جرد جديد</Btn>} />
       <Card style={{ padding: 0 }}>
         <Table columns={[
           { key: 'no', title: 'رقم الجرد', render: v => <span style={{ fontFamily: 'monospace', fontWeight: 700, color: '#818cf8' }}>{v}</span> },
@@ -136,7 +133,7 @@ function CountEditor({ id: initialId, onBack }) {
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
-        <Btn variant="ghost" size="sm" onClick={() => { if (dirty && !confirm('توجد تعديلات غير محفوظة — الخروج؟')) return; onBack(); }}>→ رجوع</Btn>
+        <Btn variant="ghost" size="sm" onClick={() => { if (dirty && !confirm('توجد تعديلات غير محفوظة — الخروج؟')) return; onBack(); }}>→ رجوع للقائمة</Btn>
         <b style={{ fontSize: 16 }}>جرد {doc.no}</b>
         <Badge color={posted ? '#10b981' : '#f59e0b'}>{posted ? `مُرحّل ${fmtDate(doc.postedAt)}${doc.postedBy?.name ? ' — ' + doc.postedBy.name : ''}` : 'مسودة'}</Badge>
         {editable && <input value={title} onChange={e => { setTitle(e.target.value); setDirty(true); }} placeholder="وصف الجرد (مثال: جرد المطبخ — رف 3)" style={{ ...inp, flex: 1, minWidth: 220 }} />}
@@ -300,15 +297,12 @@ export function OpeningBalance() {
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 12 }}>
-        <div><b>الرصيد الافتتاحي</b><div style={{ fontSize: 12, color: C.muted }}>قيمة المخزون بعد التعديلات: {fmt(totalVal)} {CUR}</div></div>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+      <PageHeader title="الرصيد الافتتاحي" icon="🗃️" subtitle={`تسجيل الكميات وتكلفة الوحدة لكل صنف — قيمة المخزون بعد التعديلات: ${fmt(totalVal)} ${CUR}`} actions={<>
           <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv,.txt" style={{ display: 'none' }} onChange={e => readFile(e.target.files[0])} />
           <Btn variant="ghost" onClick={template} disabled={!products.length}>⬇ تنزيل نموذج Excel</Btn>
           <Btn variant="ghost" onClick={() => fileRef.current?.click()} disabled={!products.length}>📤 رفع ملف Excel</Btn>
-          <Btn variant="success" onClick={save} disabled={busy || !changed}>{busy ? '⏳' : `💾 حفظ التعديلات (${changed})`}</Btn>
-        </div>
-      </div>
+          <Btn variant="success" onClick={save} disabled={busy || !changed}>{busy ? 'جارٍ الحفظ…' : `💾 حفظ التعديلات (${changed})`}</Btn>
+      </>} />
       {fileRes && (
         <Card style={{ marginBottom: 12, borderColor: fileRes.missing.length ? '#f59e0b66' : '#10b98166', fontSize: 13, lineHeight: 1.9 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>

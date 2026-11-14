@@ -66,7 +66,7 @@ export function Purchases() {
 
   return (
     <div>
-      <PageHeader title="فواتير الشراء" icon="🛒" actions={can('purchases') && [<Btn key="a" onClick={()=>{setLines([{product:'',qty:1,price:0}]);setForm({supplier:'',discount:0,shipping:0,paid:0,status:'pending',date:new Date().toISOString().slice(0,10),notes:''});setModal(true);}}>+ فاتورة شراء</Btn>]} />
+      <PageHeader title="فواتير الشراء" icon="🛍️" actions={can('purchases') && [<Btn key="a" onClick={()=>{setLines([{product:'',qty:1,price:0}]);setForm({supplier:'',discount:0,shipping:0,paid:0,status:'pending',date:new Date().toISOString().slice(0,10),notes:''});setModal(true);}}>+ فاتورة شراء</Btn>]} />
       <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:14,marginBottom:16}}>
         <StatCard label="إجمالي المشتريات" value={`${fmt(totalAmount)} ${CUR}`} icon="🛒" color="#3b82f6" />
         <StatCard label="إجمالي المدفوع" value={`${fmt(totalPaid)} ${CUR}`} icon="✅" color="#10b981" />
