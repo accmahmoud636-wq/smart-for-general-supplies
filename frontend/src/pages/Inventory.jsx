@@ -5,6 +5,7 @@ import { Card, Btn, Badge, Table, fmt, fmtDate, THEME, C_THEME as C } from '../c
 import ProductPicker, { normAr } from '../components/ProductPicker';
 import { beep } from '../utils/barcode';
 import { useAuth } from '../context/AuthContext';
+import { readReportFile } from '../utils/parseReport';
 
 const CUR = THEME.currency || 'ج.م';
 const err = (e) => e.response?.data?.message || e.message || 'خطأ';
@@ -213,8 +214,69 @@ export function OpeningBalance() {
   const [q, setQ] = useState('');
   const [cat, setCat] = useState('');
   const [busy, setBusy] = useState(false);
+  const [maps, setMaps] = useState([]);
+  const [fileRes, setFileRes] = useState(null);   // نتيجة قراءة ملف Excel
+  const fileRef = useRef();
   const load = () => api.get('/products').then(r => setProducts(r.data.filter(p => p.active !== false && !p.isKit))).catch(e => toast.error(err(e)));
-  useEffect(() => { load(); api.get('/categories').then(r => setCats(r.data)).catch(() => {}); }, []);
+  useEffect(() => { load(); api.get('/categories').then(r => setCats(r.data)).catch(() => {}); api.get('/amazon/skus/maps').then(r => setMaps(r.data)).catch(() => {}); }, []);
+
+  // ─── رفع ملف Excel: اسم الصنف (أو SKU / الباركود) + الكمية + سعر الوحدة بالتكلفة ───
+  const COLS = {
+    name: ['اسم الصنف', 'اسم المنتج', 'الصنف', 'المنتج', 'الاسم', 'name', 'product', 'item', 'product name'],
+    sku: ['sku', 'seller sku', 'رمز sku', 'كود'],
+    barcode: ['الباركود', 'باركود', 'barcode'],
+    qty: ['الكمية', 'الكميه', 'كمية', 'الرصيد', 'qty', 'quantity', 'stock'],
+    cost: ['سعر الوحدة', 'سعر الوحده', 'سعر الوحدة بالتكلفة', 'التكلفة', 'التكلفه', 'تكلفة الوحدة', 'سعر الشراء', 'cost', 'unit cost', 'price'],
+  };
+  const num = (v) => { const t = String(v ?? '').replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d)).replace(/[,،\s]/g, '').replace('٫', '.'); return t === '' || isNaN(+t) ? null : +t; };
+  const readFile = async (file) => {
+    if (!file) return;
+    try {
+      const rows = await readReportFile(file);
+      const key = (h) => normAr(String(h)).replace(/[()]/g, '').trim();
+      let hi = -1, idx = {};
+      for (let i = 0; i < Math.min(rows.length, 15) && hi < 0; i++) {
+        const hs = rows[i].map(key), m = {};
+        for (const [f, al] of Object.entries(COLS)) { const j = hs.findIndex(h => al.some(a => h === normAr(a) || (f !== 'sku' && h.startsWith(normAr(a))))); if (j >= 0) m[f] = j; }
+        if ((m.name !== undefined || m.sku !== undefined || m.barcode !== undefined) && (m.qty !== undefined || m.cost !== undefined)) { hi = i; idx = m; }
+      }
+      if (hi < 0) { toast.error('لم يُعثر على الأعمدة المطلوبة — يجب أن يتضمن الملف «اسم الصنف» و«الكمية» و/أو «سعر الوحدة»'); return; }
+      const byName = new Map(products.map(p => [normAr(p.name).trim(), p]));
+      const bySku = new Map(products.filter(p => p.sku).map(p => [p.sku.trim().toLowerCase(), p]));
+      const byId = new Map(products.map(p => [p._id, p]));
+      for (const m of maps) if (byId.has(m.product)) bySku.set(m.sku.trim().toLowerCase(), byId.get(m.product));
+      const byBar = new Map(products.filter(p => p.barcode).map(p => [String(p.barcode).trim(), p]));
+      const next = { ...edits }, missing = [];
+      let matched = 0, changedN = 0;
+      for (const r of rows.slice(hi + 1)) {
+        const name = idx.name !== undefined ? String(r[idx.name] || '').trim() : '';
+        const sku = idx.sku !== undefined ? String(r[idx.sku] || '').trim().toLowerCase() : '';
+        const bar = idx.barcode !== undefined ? String(r[idx.barcode] || '').trim() : '';
+        if (!name && !sku && !bar) continue;
+        const p = (sku && bySku.get(sku)) || (bar && byBar.get(bar)) || (name && byName.get(normAr(name).trim()));
+        if (!p) { missing.push(name || sku || bar); continue; }
+        matched++;
+        const qty = idx.qty !== undefined ? num(r[idx.qty]) : null, cost = idx.cost !== undefined ? num(r[idx.cost]) : null;
+        const e = { ...(next[p._id] || {}) };
+        if (qty !== null && Math.round(qty) !== p.stock) e.qty = Math.round(qty);
+        if (cost !== null && cost >= 0 && cost !== p.buyPrice) e.cost = cost;
+        if (Object.keys(e).length) { next[p._id] = e; changedN++; }
+      }
+      setEdits(next);
+      setFileRes({ name: file.name, matched, changed: changedN, missing });
+      toast.success(`تمت قراءة الملف: ${matched} صنف مطابق — ${changedN} صنف به تغيير`);
+    } catch (e) { toast.error('تعذّرت قراءة الملف: ' + e.message); }
+    if (fileRef.current) fileRef.current.value = '';
+  };
+  // نموذج فيه كل الأصناف بكمياتها وتكلفتها الحالية — يتعدّل ويترفع
+  const template = async () => {
+    const XLSX = await import('xlsx');
+    const ws = XLSX.utils.aoa_to_sheet([['اسم الصنف', 'SKU', 'الكمية', 'سعر الوحدة (التكلفة)'], ...products.map(p => [p.name, p.sku || '', p.stock, p.buyPrice || 0])]);
+    ws['!cols'] = [{ wch: 55 }, { wch: 18 }, { wch: 10 }, { wch: 20 }];
+    ws['!views'] = [{ RTL: true }];
+    const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'الرصيد الافتتاحي');
+    XLSX.writeFile(wb, 'opening-balance-template.xlsx');
+  };
 
   const words = normAr(q).split(' ').filter(Boolean);
   const list = products.filter(p => (!cat || (cat === 'none' ? !p.category : (p.category?._id || p.category) === cat))
@@ -240,8 +302,22 @@ export function OpeningBalance() {
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 12 }}>
         <div><b>الرصيد الافتتاحي</b><div style={{ fontSize: 12, color: C.muted }}>قيمة المخزون بعد التعديلات: {fmt(totalVal)} {CUR}</div></div>
-        <Btn variant="success" onClick={save} disabled={busy || !changed}>{busy ? '⏳' : `💾 حفظ التعديلات (${changed})`}</Btn>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv,.txt" style={{ display: 'none' }} onChange={e => readFile(e.target.files[0])} />
+          <Btn variant="ghost" onClick={template} disabled={!products.length}>⬇ تنزيل نموذج Excel</Btn>
+          <Btn variant="ghost" onClick={() => fileRef.current?.click()} disabled={!products.length}>📤 رفع ملف Excel</Btn>
+          <Btn variant="success" onClick={save} disabled={busy || !changed}>{busy ? '⏳' : `💾 حفظ التعديلات (${changed})`}</Btn>
+        </div>
       </div>
+      {fileRes && (
+        <Card style={{ marginBottom: 12, borderColor: fileRes.missing.length ? '#f59e0b66' : '#10b98166', fontSize: 13, lineHeight: 1.9 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+            <span>📄 <b>{fileRes.name}</b>: {fileRes.matched} صنف مطابق، منها <b>{fileRes.changed}</b> صنف به تغيير (مظلّل أدناه). راجع القيم ثم اضغط «حفظ التعديلات».</span>
+            <button onClick={() => setFileRes(null)} style={{ background: 'none', border: 'none', color: C.muted, cursor: 'pointer' }}>✕</button>
+          </div>
+          {fileRes.missing.length > 0 && <div style={{ color: '#f59e0b' }}>⚠ {fileRes.missing.length} سطر لم يُطابق أي صنف (يُرجى التأكد من الاسم أو إضافة عمود SKU): <span style={{ color: C.sub }}>{fileRes.missing.slice(0, 15).join('، ')}{fileRes.missing.length > 15 ? ' …' : ''}</span></div>}
+        </Card>
+      )}
       <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
         <input value={q} onChange={e => setQ(e.target.value)} placeholder="بحث بالاسم أو SKU أو الباركود..." style={{ ...inp, flex: 1, minWidth: 220 }} />
         <select value={cat} onChange={e => setCat(e.target.value)} style={inp}>

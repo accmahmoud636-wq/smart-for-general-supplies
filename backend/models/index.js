@@ -75,6 +75,8 @@ const purchaseSchema = new Schema({
   invoiceNo: { type: String, unique: true },
   supplier:  { type: Schema.Types.ObjectId, ref: 'Supplier', required: true },
   items:     [purchaseItemSchema],
+  // سجل تكلفة كل صنف اتسجلت بالمتوسط المرجح (عشان الحذف يرجّع سعر الشراء)
+  costLog:   [{ product: { type: Schema.Types.ObjectId, ref: 'Product' }, qty: Number, unit: Number, _id: false }],
   subtotal:  { type: Number, required: true },
   discount:  { type: Number, default: 0 },
   shipping:  { type: Number, default: 0 },

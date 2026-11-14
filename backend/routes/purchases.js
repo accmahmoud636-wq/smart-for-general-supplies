@@ -40,9 +40,16 @@ router.post('/', auth, permit('purchases'), async (req, res) => {
 
     // Update stock and supplier balance
     // شراء صنف مركب = استلام مكوناته
-    const { moveStock } = require('../utils/stock');
-    for (const item of purchase.items)
+    const { moveStock, averageIn } = require('../utils/stock');
+    // تكلفة الوحدة الفعلية: سعرها + نصيبها من الشحن − نصيبها من الخصم (بنسبة قيمة السطر)
+    const sub = purchase.items.reduce((t, i) => t + i.qty * i.price, 0);
+    const factor = sub > 0 ? Math.max(0, (sub - (purchase.discount || 0) + (purchase.shipping || 0)) / sub) : 1;
+    const log = [];
+    for (const item of purchase.items) {
+      log.push(...await averageIn(item.product, item.qty, item.price * factor));   // قبل الحركة: محتاج الرصيد قبل الاستلام
       await moveStock(item.product, item.qty, { type: 'in', reason: 'فاتورة شراء', reference: invoiceNo, userId: req.user._id });
+    }
+    purchase.costLog = log; await purchase.save();
     if (purchase.total > purchase.paid) {
       await Supplier.findByIdAndUpdate(purchase.supplier, { $inc: { balance: purchase.total - purchase.paid } });
     }
@@ -63,7 +70,8 @@ router.delete('/:id', auth, permit('purchases'), async (req, res) => {
   try {
     const p = await Purchase.findById(req.params.id);
     if (!p) return res.status(404).json({ message: 'الفاتورة غير موجودة' });
-    const { moveStock } = require('../utils/stock');
+    const { moveStock, averageOut } = require('../utils/stock');
+    await averageOut(p.costLog);                                   // سعر الشراء يرجع زي ما كان قبل الفاتورة
     for (const i of p.items) await moveStock(i.product, -i.qty, { type: 'out', reason: 'حذف فاتورة شراء', reference: p.invoiceNo, userId: req.user._id });
     if (p.total > p.paid) await Supplier.findByIdAndUpdate(p.supplier, { $inc: { balance: -(p.total - p.paid) } });
     await p.deleteOne();
