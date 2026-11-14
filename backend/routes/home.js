@@ -46,7 +46,10 @@ router.get('/', auth, async (req, res) => {
       const unmapped = [...new Set([...txSkus, ...orderSkus])].filter(s => s && !resolve(s));
       const since = new Date(Date.now() - 7 * 864e5);
       const refunds = await AmazonTransaction.find({ kind: 'refund', date: { $gte: since } }).select('date orderId description qty total').sort('-date').lean();
+      const la = await require('./amazon').listingAlerts();
       out.amazon = {
+        toClose: la.toClose.map(r => ({ sku: r.sku, name: r.name, available: r.available, sold30: r.sold30 })),
+        toOpen: la.toOpen.map(r => ({ sku: r.sku, name: r.name, available: r.available })),
         unmapped: unmapped.length,
         refunds: refunds.map(r => ({ date: r.date, orderId: r.orderId, name: r.description, qty: Math.abs(r.qty), amount: Math.round(r.total * 100) / 100 })),
       };

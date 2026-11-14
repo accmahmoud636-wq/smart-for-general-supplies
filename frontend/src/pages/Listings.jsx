@@ -5,6 +5,8 @@ import { Card, Badge, PageHeader, StatCard, Table, fmt, fmtDate, THEME, C_THEME 
 import { normAr } from '../components/ProductPicker';
 import toast from 'react-hot-toast';
 import { readReportFile } from '../utils/parseReport';
+import ListingAlerts from '../components/ListingAlerts';
+import { useSearchParams } from 'react-router-dom';
 
 const CUR = THEME.currency || 'ج.م';
 // الإجراءات اللي محتاجة تتعمل — بالترتيب حسب الأهمية
@@ -52,6 +54,9 @@ export default function Listings() {
   const [last, setLast] = useState(null);
   const [det, setDet] = useState(null);
   const tableRef = useRef();
+  const alertsRef = useRef();
+  const [sp] = useSearchParams();
+  useEffect(() => { if (d && sp.get('alerts')) setTimeout(() => alertsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 300); }, [!!d]);
   const pick = (f) => { setFilter(cur => cur === f ? 'focus' : f); setTimeout(() => tableRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50); };
 
   const load = () => api.get('/amazon/listings', { params: { days } }).then(r => setD(r.data)).catch(e => toast.error(e.response?.data?.message || 'خطأ'));
@@ -150,6 +155,8 @@ export default function Listings() {
         <StatCard onClick={() => pick('no_listing')} active={filter === 'no_listing'} label="أصناف بدون إعلان" value={K.counts.no_listing} icon="➕" color="#8b5cf6" />
         <StatCard onClick={() => pick('stars')} active={filter === 'stars'} label="الأعلى مبيعاً ⭐" value={K.stars} icon="⭐" color="#10b981" sub="أعلى 10% من الإعلانات اللي باعت" />
       </div>
+
+      <ListingAlerts innerRef={alertsRef} />
 
       {/* الملخص المالي */}
       {d.fin && K.hasTx && (() => { const F = d.fin; return (

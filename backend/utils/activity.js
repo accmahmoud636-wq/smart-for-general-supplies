@@ -41,6 +41,7 @@ const RULES = [
   ['DELETE', /^\/api\/products\//, 'حذف صنف'],
   ['POST', /^\/api\/admin\/products\/import/, 'استيراد أصناف'],
   ['POST', /^\/api\/inventory\/opening/, 'رصيد افتتاحي'],
+  ['POST', /^\/api\/amazon\/listing-alerts/, 'تنبيهات قفل الإعلانات'],
   ['POST', /^\/api\/inventory\/[^/]+\/post/, 'ترحيل جرد'],
   ['POST', /^\/api\/inventory$/, 'إنشاء جرد'],
   ['PUT', /^\/api\/inventory\//, 'تعديل جرد'],

@@ -798,6 +798,80 @@ router.get('/listings', auth, permit('amazon', 'amazon:read'), async (req, res) 
 });
 
 // ═══════════════════════════════════════════════════════════════
+// 7.6) تنبيه «اقفل الإعلان»: الإعلانات اللي رصيدها خلص أو قرّب يخلص
+// المتاح للإعلان = أقل (رصيد المكوّن ÷ كميته في الإعلان) — يشمل الباكدج ×2 والأطقم
+// ═══════════════════════════════════════════════════════════════
+const ALERT_KEY = 'listing_alerts';
+async function alertState() {
+  const Setting = require('../models/Setting');
+  const v = (await Setting.findOne({ key: ALERT_KEY }).lean())?.value || {};
+  return { min: Number.isFinite(+v.min) ? +v.min : 2, closed: Array.isArray(v.closed) ? v.closed : [] };
+}
+async function saveAlertState(st) {
+  const Setting = require('../models/Setting');
+  await Setting.findOneAndUpdate({ key: ALERT_KEY }, { key: ALERT_KEY, value: st }, { upsert: true });
+}
+async function listingAlerts() {
+  const st = await alertState();
+  const { parts, products } = await buildResolver();
+  const maps = await AmazonSkuMap.find().select('sku').lean();
+  // الإعلان «شغال» = اتطلب في آخر ACTIVE_DAYS يوم (الإعلانات اللي مابتبيعش غالباً مقفولة أصلاً)
+  const ACTIVE_DAYS = 60, now = Date.now(), since = new Date(now - ACTIVE_DAYS * 864e5), d30 = new Date(now - 30 * 864e5);
+  const [ords, txs] = await Promise.all([
+    AmazonOrder.find({ purchaseDate: { $gte: since }, stage: { $ne: 'cancelled' } }).select('sku qty purchaseDate').lean(),
+    AmazonTransaction.find({ date: { $gte: since }, kind: 'order', sku: { $ne: '' } }).select('sku qty date').lean(),
+  ]);
+  const sold = {}, soldTx = {}, last = {};
+  const add = (bag, sku, qty, date) => { const k = sku.toLowerCase(); if (date >= d30) bag[k] = (bag[k] || 0) + qty; if (!last[k] || date > last[k]) last[k] = date; };
+  for (const o of ords) add(sold, o.sku, o.qty, o.purchaseDate);
+  for (const t of txs) add(soldTx, t.sku, t.qty, t.date);
+  const skus = new Map();
+  for (const p of products) if (p.sku && p.active !== false) skus.set(p.sku.trim().toLowerCase(), p.sku.trim());
+  for (const m of maps) skus.set(m.sku.trim().toLowerCase(), m.sku.trim());
+  const closed = new Map(st.closed.map(c => [String(c.sku).toLowerCase(), c]));
+  const toClose = [], toOpen = [];
+  let quiet = 0;
+  for (const [k, sku] of skus) {
+    const ps = parts(sku);
+    if (!ps.length || ps.some(x => x.p.active === false)) continue;
+    const per = ps.map(x => ({ x, can: Math.floor(Math.max(0, x.p.stock) / x.qty) }));
+    const neck = per.reduce((a, b) => b.can < a.can ? b : a);
+    const row = {
+      sku, available: neck.can, name: ps.length === 1 && ps[0].qty === 1 ? ps[0].p.name : ps.map(x => `${x.p.name}${x.qty > 1 ? ' ×' + x.qty : ''}`).join(' + '),
+      neck: ps.length > 1 || ps[0].qty > 1 ? `${neck.x.p.name} (رصيده ${neck.x.p.stock})` : null, stock: neck.x.p.stock, productId: neck.x.p._id,
+      sold30: Math.max(sold[k] || 0, soldTx[k] || 0), lastSale: last[k] || null,
+    };
+    const c = closed.get(k);
+    if (c) { if (row.available > st.min) toOpen.push({ ...row, closedAt: c.at, closedBy: c.by }); }
+    else if (row.available <= st.min) { if (row.lastSale) toClose.push(row); else quiet++; }
+  }
+  // اللي بيبيع الأول (الأخطر إنه يتطلب)، وبعدين الأقل رصيداً
+  toClose.sort((a, b) => b.sold30 - a.sold30 || a.available - b.available);
+  toOpen.sort((a, b) => b.sold30 - a.sold30);
+  return { min: st.min, toClose, toOpen, closedCount: st.closed.length, quiet, activeDays: ACTIVE_DAYS };
+}
+router.get('/listing-alerts', auth, permit('amazon', 'amazon:read'), async (req, res) => {
+  try { res.json(await listingAlerts()); } catch (e) { res.status(500).json({ message: e.message }); }
+});
+// action: close = «قفلته على أمازون» | open = «فتحته تاني» | min = تغيير الحد
+router.post('/listing-alerts', auth, permit('amazon'), async (req, res) => {
+  try {
+    const st = await alertState();
+    const { action, skus = [] } = req.body;
+    const set = new Set(skus.map(x => String(x).toLowerCase()));
+    if (action === 'close') {
+      const have = new Set(st.closed.map(c => String(c.sku).toLowerCase()));
+      for (const sku of skus) if (!have.has(String(sku).toLowerCase())) st.closed.push({ sku: String(sku), at: new Date(), by: req.user.name });
+    } else if (action === 'open') st.closed = st.closed.filter(c => !set.has(String(c.sku).toLowerCase()));
+    else if (action === 'min') st.min = Math.max(0, Math.min(50, Math.round(+req.body.min || 0)));
+    else return res.status(400).json({ message: 'إجراء غير معروف' });
+    await saveAlertState(st);
+    const msg = action === 'close' ? `تم تسجيل قفل ${skus.length} إعلان` : action === 'open' ? `تم تسجيل فتح ${skus.length} إعلان` : `حد التنبيه: ${st.min}`;
+    res.json({ message: msg, ...(await listingAlerts()) });
+  } catch (e) { res.status(500).json({ message: e.message }); }
+});
+
+// ═══════════════════════════════════════════════════════════════
 // 8) ملخص سريع لأعلى الصفحة
 // ═══════════════════════════════════════════════════════════════
 router.get('/summary', auth, permit('amazon', 'amazon:read'), async (req, res) => {
@@ -892,6 +966,7 @@ router.get('/overview', auth, permit('amazon', 'amazon:read'), async (req, res) 
 module.exports = router;
 module.exports.postOrderGroup = postOrderGroup;
 module.exports.buildResolver = buildResolver;
+module.exports.listingAlerts = listingAlerts;
 module.exports.importOrders = importOrders;
 module.exports.importTransactions = importTransactions;
 module.exports._test = { num, parseDate, mapHeaders, stageFromAmazon, kindFromType, ORDER_ALIASES, TX_ALIASES };
