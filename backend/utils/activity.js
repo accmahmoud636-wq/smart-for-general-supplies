@@ -42,6 +42,8 @@ const RULES = [
   ['POST', /^\/api\/admin\/products\/import/, 'استيراد أصناف'],
   ['POST', /^\/api\/inventory\/opening/, 'رصيد افتتاحي'],
   ['POST', /^\/api\/amazon\/listing-alerts/, 'تنبيهات قفل الإعلانات'],
+  ['POST', /^\/api\/market/, 'إضافة منتج لرصد السوق'],
+  ['DELETE', /^\/api\/market/, 'حذف من رصد السوق'],
   ['POST', /^\/api\/inventory\/[^/]+\/post/, 'ترحيل جرد'],
   ['POST', /^\/api\/inventory$/, 'إنشاء جرد'],
   ['PUT', /^\/api\/inventory\//, 'تعديل جرد'],

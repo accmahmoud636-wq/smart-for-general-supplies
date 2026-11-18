@@ -24,6 +24,7 @@ const SECTIONS = [
     { path: '/listings',               icon: '📣', label: 'الإعلانات والأرباح',      perm: 'amazon:read' },
     { path: '/amazon?tab=recon',       icon: '🏦', label: 'التسويات والدفعات',      perm: 'amazon:read' },
     { path: '/amazon?tab=skus',        icon: '🔗', label: 'ربط رموز SKU',           perm: 'products' },
+    { path: '/market',                 icon: '🔥', label: 'رصد السوق والترند',      perm: 'amazon:read' },
   ] },
   { title: 'المخزون', items: [
     { path: '/products',               icon: '🏷️', label: 'المنتجات',               perm: 'products:read' },

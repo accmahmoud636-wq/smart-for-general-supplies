@@ -13,6 +13,7 @@ import Shipments from './pages/Shipments';
 import Damaged from './pages/Damaged';
 import Seasons from './pages/Seasons';
 import Listings from './pages/Listings';
+import Market from './pages/Market';
 import { StockCount, OpeningBalance } from './pages/Inventory';
 
 function PrivateRoute({ children }) {
@@ -45,6 +46,7 @@ function AppRoutes() {
       <Route path="/stock"      element={<PrivateRoute><StockPage /></PrivateRoute>} />
       <Route path="/reports"    element={<PrivateRoute><Reports /></PrivateRoute>} />
       <Route path="/reports/inventory" element={<PrivateRoute><Reports /></PrivateRoute>} />
+      <Route path="/market"     element={<PrivateRoute><Market /></PrivateRoute>} />
       <Route path="/inventory/count"   element={<PrivateRoute><StockCount /></PrivateRoute>} />
       <Route path="/inventory/opening" element={<PrivateRoute><OpeningBalance /></PrivateRoute>} />
       <Route path="/settings"   element={<PrivateRoute><Settings /></PrivateRoute>} />

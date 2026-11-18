@@ -7,7 +7,7 @@ import {
   IconCalculator, IconLock, IconPalette, IconSparkles, IconActivity, IconCircleCheck, IconStar, IconHourglass,
   IconArrowBackUp, IconReceipt, IconHandStop, IconBan, IconTruckDelivery, IconTrash, IconMailForward, IconUpload,
   IconPencil, IconCalendar, IconFileText, IconDeviceFloppy, IconCash, IconZzz, IconTrendingUp, IconPlus, IconX,
-  IconSettings, IconScale, IconCirclePlus, IconDiamond, IconShoppingBag, IconFileInvoice, IconDatabaseImport,
+  IconSettings, IconScale, IconCirclePlus, IconDiamond, IconShoppingBag, IconFileInvoice, IconDatabaseImport, IconFlame,
 } from '@tabler/icons-react';
 
 const C = { indigo: '#818cf8', amber: '#fbbf24', orange: '#fb923c', pink: '#f472b6', green: '#34d399', teal: '#2dd4bf',
@@ -27,7 +27,7 @@ export const ICON_MAP = {
   '🧾': [IconReceipt, C.slate], '🛑': [IconHandStop, C.red], '🚫': [IconBan, C.red], '🗑️': [IconTrash, C.red],
   '📨': [IconMailForward, C.sky], '📤': [IconUpload, C.sky], '📝': [IconPencil, C.amber], '📄': [IconFileText, C.slate],
   '💾': [IconDeviceFloppy, C.indigo], '💤': [IconZzz, C.slate], '➕': [IconPlus, C.indigo], '🆕': [IconCirclePlus, C.indigo],
-  '❌': [IconX, C.red], '🛍️': [IconShoppingBag, C.teal], '📑': [IconFileInvoice, C.sky], '🗃️': [IconDatabaseImport, C.lime], '⚖️': [IconScale, C.cyan], '🔷': [IconDiamond, C.sky],
+  '❌': [IconX, C.red], '🛍️': [IconShoppingBag, C.teal], '📑': [IconFileInvoice, C.sky], '🗃️': [IconDatabaseImport, C.lime], '🔥': [IconFlame, C.orange], '⚖️': [IconScale, C.cyan], '🔷': [IconDiamond, C.sky],
 };
 
 // مربع ملون فيه الأيقونة. size = ضلع المربع
