@@ -5,6 +5,9 @@ import toast from 'react-hot-toast';
 import { normAr } from './ProductPicker';
 
 const SIZE_KEY = 'erp_label_size';
+const QUEUE_KEY = 'erp_label_queue';   // قائمة الطباعة محفوظة في المتصفح لحد الطباعة أو المسح
+const loadQueue = () => { try { return JSON.parse(localStorage.getItem(QUEUE_KEY) || '{}') || {}; } catch { return {}; } };
+const saveQueue = (q) => { try { const c = Object.fromEntries(Object.entries(q).filter(([, n]) => +n > 0)); localStorage.setItem(QUEUE_KEY, JSON.stringify(c)); } catch { /* */ } };
 
 // products: المنتجات المعروضة — initial: { productId: copies }
 // maps: ربط SKUs أمازون الإضافية [{ sku, product }] — عشان البحث يلاقي الصنف بأي SKU من إعلاناته
@@ -14,8 +17,17 @@ export default function LabelModal({ open, onClose, products = [], initial = {},
   const [showName, setShowName] = useState(true);
   const [showPrice, setShowPrice] = useState(false);
   const [search, setSearch] = useState('');
+  const [onlySel, setOnlySel] = useState(false);
 
-  useEffect(() => { if (open) { setCopies(initial); setSearch(''); } }, [open]);
+  // عند الفتح: القائمة المحفوظة + الصنف اللي اتضغط عليه (لو مش موجود)
+  useEffect(() => {
+    if (!open) return;
+    const q = loadQueue();
+    for (const [id, n] of Object.entries(initial)) if (!(+q[id] > 0)) q[id] = n;
+    setCopies(q); setSearch(''); setOnlySel(false);
+  }, [open]);
+  // أي تعديل بيتحفظ فوراً — الخروج من الصفحة أو قفل الشاشة مش بيمسح القائمة
+  useEffect(() => { if (open) saveQueue(copies); }, [copies, open]);
 
   // فهرس بحث: الاسم + SKU الأساسي + كل SKUs الإعلانات + ASIN + الباركود
   const index = useMemo(() => {
@@ -24,9 +36,10 @@ export default function LabelModal({ open, onClose, products = [], initial = {},
     return products.map(p => ({ p, skus: [p.sku, ...(extra[p._id] || [])].filter(Boolean), k: normAr([p.name, p.sku, p.asin, p.barcode, ...(extra[p._id] || [])].filter(Boolean).join(' ')) }));
   }, [products, maps]);
   const words = normAr(search).split(' ').filter(Boolean);
-  const list = useMemo(() => index.filter(x => !words.length || words.every(w => x.k.includes(w)))
-    .map(x => ({ ...x.p, _hit: words.length ? x.skus.find(s => words.some(w => normAr(s).includes(w))) : null })), [index, search]);
+  const list = useMemo(() => index.filter(x => (!onlySel || +copies[x.p._id] > 0) && (!words.length || words.every(w => x.k.includes(w))))
+    .map(x => ({ ...x.p, _hit: words.length ? x.skus.find(s => words.some(w => normAr(s).includes(w))) : null })), [index, search, onlySel, copies]);
   const total = Object.values(copies).reduce((s, n) => s + (+n || 0), 0);
+  const selCount = products.filter(p => +copies[p._id] > 0).length;
   const first = products.find(p => copies[p._id] > 0 && p.barcode);
 
   const setAll = (fn) => setCopies(c => { const n = { ...c }; list.forEach(p => { n[p._id] = fn(p); }); return n; });
@@ -36,7 +49,10 @@ export default function LabelModal({ open, onClose, products = [], initial = {},
     const items = products.filter(p => copies[p._id] > 0).map(p => ({ name: p.name, barcode: p.barcode, price: p.sellPrice, copies: +copies[p._id] }));
     const noCode = items.filter(i => !i.barcode).length;
     if (noCode) toast.error(`${noCode} صنف دون باركود — يُرجى توليد الباركود أولاً`);
-    if (printLabels(items, size, { showName, showPrice })) onClose();
+    if (printLabels(items, size, { showName, showPrice })) {
+      // بعد الطباعة: القائمة تتمسح
+      setCopies({}); saveQueue({}); toast.success(`تم إرسال ${items.reduce((t, i) => t + i.copies, 0)} ملصق للطباعة وتفريغ القائمة`); onClose();
+    }
   };
 
   const inp = { background: 'var(--bg)', border: `1px solid ${C.border}`, borderRadius: 6, padding: '6px 8px', color: C.text, fontSize: 13 };
@@ -65,6 +81,11 @@ export default function LabelModal({ open, onClose, products = [], initial = {},
         <Btn size="sm" variant="ghost" onClick={() => setAll(p => Math.max(0, p.stock || 0))}>حسب الرصيد</Btn>
         <Btn size="sm" variant="ghost" onClick={() => setAll(() => 0)}>تصفير</Btn>
       </div>
+      <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 8, fontSize: 13, color: C.sub, flexWrap: 'wrap' }}>
+        <label style={{ display: 'flex', gap: 6, alignItems: 'center', cursor: 'pointer' }}><input type="checkbox" checked={onlySel} onChange={e => setOnlySel(e.target.checked)} /> عرض المضاف للقائمة فقط ({selCount})</label>
+        {selCount > 0 && <button onClick={() => { if (confirm('تفريغ قائمة الطباعة بالكامل؟')) { setCopies({}); setOnlySel(false); } }} style={{ background: 'none', border: 'none', color: '#f87171', cursor: 'pointer', fontSize: 12 }}>تفريغ القائمة</button>}
+        <span style={{ marginRight: 'auto', fontSize: 11, color: C.muted }}>القائمة محفوظة تلقائياً حتى الطباعة</span>
+      </div>
 
       <div style={{ maxHeight: 300, overflowY: 'auto', border: `1px solid ${C.border}`, borderRadius: 8 }}>
         {list.map(p => (
@@ -79,9 +100,9 @@ export default function LabelModal({ open, onClose, products = [], initial = {},
       </div>
 
       <div style={{ display: 'flex', gap: 8, justifyContent: 'space-between', alignItems: 'center', marginTop: 14 }}>
-        <span style={{ fontSize: 13, color: C.sub }}>إجمالي الملصقات: <b style={{ color: 'var(--text)' }}>{total}</b></span>
+        <span style={{ fontSize: 13, color: C.sub }}>{selCount} صنف — إجمالي الملصقات: <b style={{ color: 'var(--text)' }}>{total}</b></span>
         <div style={{ display: 'flex', gap: 8 }}>
-          <Btn variant="ghost" onClick={onClose}>إلغاء</Btn>
+          <Btn variant="ghost" onClick={onClose}>إغلاق (القائمة محفوظة)</Btn>
           <Btn onClick={doPrint} disabled={!total}>طباعة</Btn>
         </div>
       </div>

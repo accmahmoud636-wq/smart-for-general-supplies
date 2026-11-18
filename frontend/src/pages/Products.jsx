@@ -28,6 +28,8 @@ export default function Products() {
   const [adjustQty, setAdjustQty] = useState('');
   const [adjustReason, setAdjustReason] = useState('');
   const [labels, setLabels] = useState(null); // { productId: copies }
+  // عدد الأصناف المحفوظة في قائمة الطباعة (بيتحدث بعد قفل نافذة الطباعة)
+  const labelQueue = (() => { try { return Object.keys(JSON.parse(localStorage.getItem('erp_label_queue') || '{}')).length; } catch { return 0; } })();
   const [cam, setCam] = useState('');
   const [maps, setMaps] = useState([]);          // كل ربط SKU أمازون ← صنف
   const [skus, setSkus] = useState([]);          // SKUs الصنف المفتوح في الكارت
@@ -127,7 +129,7 @@ export default function Products() {
     <div>
       <PageHeader title="المنتجات" icon="🏷️" actions={[
         can('products') && <Btn key="imp" variant="ghost" onClick={() => window.location.assign('/settings?tab=data')}>استيراد من Excel</Btn>,
-        <Btn key="lbl" variant="ghost" onClick={() => setLabels({})}>طباعة الباركود</Btn>,
+        <Btn key="lbl" variant="ghost" onClick={() => setLabels({})}>{`طباعة الباركود${labelQueue ? ` (${labelQueue} في القائمة)` : ''}`}</Btn>,
         can('products') && <Btn key="gen" variant="ghost" onClick={generateAll}>توليد الباركود</Btn>,
         can('products') && <Btn key="add" onClick={openNew}>+ إضافة منتج</Btn>
       ]} />
