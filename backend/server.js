@@ -41,6 +41,7 @@ app.use('/api/damaged',    require('./routes/damaged'));
 app.use('/api/assistant',  require('./routes/assistant'));
 app.use('/api/seasons',    require('./routes/seasons'));
 app.use('/api/inventory',  require('./routes/inventory'));
+app.use('/api/label-lists', require('./routes/labels'));
 app.use('/api/settings',   require('./routes/settings'));
 app.use('/api/home',       require('./routes/home'));
 app.use('/api/admin',      require('./routes/admin'));

@@ -8,9 +8,9 @@ const MAX = 80;
 
 const bump = () => { version++; store.clear(); if (process.env.CACHE_DEBUG) console.log('cache bump', version); };
 
-// يمسح الذاكرة بعد أي كتابة ناجحة (ماعدا تسجيل الدخول والـ ping)
+// يمسح الذاكرة بعد أي كتابة ناجحة (ماعدا تسجيل الدخول والـ ping وقوائم الباركود — مش بتغيّر أرقام)
 function invalidator(req, res, next) {
-  if (req.method !== 'GET' && !req.path.startsWith('/api/auth')) res.on('finish', () => { if (res.statusCode < 400) bump(); });
+  if (req.method !== 'GET' && !/^\/api\/(auth|label-lists)/.test(req.path)) res.on('finish', () => { if (res.statusCode < 400) bump(); });
   next();
 }
 

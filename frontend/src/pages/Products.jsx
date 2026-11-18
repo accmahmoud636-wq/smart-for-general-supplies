@@ -6,7 +6,8 @@ import api from '../utils/api';
 import { Card, Btn, Badge, Input, Select, Modal, Table, PageHeader, fmt, C_THEME as C, THEME } from '../components/UI';
 import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
-import LabelModal from '../components/LabelModal';
+import LabelModal, { loadLabelLists, saveLabelLists, cleanCopies } from '../components/LabelModal';
+import { IconPrinter, IconX } from '@tabler/icons-react';
 import CameraScanner from '../components/CameraScanner';
 
 const CUR = THEME.currency || 'ج.م';
@@ -28,8 +29,19 @@ export default function Products() {
   const [adjustQty, setAdjustQty] = useState('');
   const [adjustReason, setAdjustReason] = useState('');
   const [labels, setLabels] = useState(null); // { productId: copies }
-  // عدد الأصناف المحفوظة في قائمة الطباعة (بيتحدث بعد قفل نافذة الطباعة)
-  const labelQueue = (() => { try { return Object.keys(JSON.parse(localStorage.getItem('erp_label_queue') || '{}')).length; } catch { return 0; } })();
+  // قوائم الباركود المحفوظة — بتظهر تحت رأس الصفحة، والضغط على أي قائمة يفتحها للطباعة
+  const [lists, setLists] = useState([]);
+  const [listId, setListId] = useState(null);
+  useEffect(() => { loadLabelLists().then(setLists).catch(() => {}); }, []);
+  const putList = (l, isNew) => {
+    setLists(ls => { const next = isNew ? [...ls, l] : ls.map(x => x.id === l.id ? l : x); saveLabelLists(next).catch(() => toast.error('تعذّر حفظ القائمة')); return next; });
+    if (isNew) setListId(l.id);
+  };
+  const removeList = (l) => {
+    if (!confirm(`حذف القائمة «${l.name}» من القوائم المحفوظة؟`)) return;
+    setLists(ls => { const next = ls.filter(x => x.id !== l.id); saveLabelLists(next).catch(() => toast.error('تعذّر الحذف')); return next; });
+  };
+
   const [cam, setCam] = useState('');
   const [maps, setMaps] = useState([]);          // كل ربط SKU أمازون ← صنف
   const [skus, setSkus] = useState([]);          // SKUs الصنف المفتوح في الكارت
@@ -119,7 +131,7 @@ export default function Products() {
     { key: '_id', title: 'إجراءات', render: (_, r) => (
       <div style={{ display: 'flex', gap: 6 }}>
         {can('products') && <Btn size="sm" variant="ghost" onClick={() => openEdit(r)}>✏️</Btn>}
-        <Btn size="sm" variant="ghost" onClick={() => setLabels({ [r._id]: 1 })}>🏷️</Btn>
+        <Btn size="sm" variant="ghost" onClick={() => { setListId(null); setLabels({ [r._id]: 1 }); }}>🏷️</Btn>
         {can('stock') && !r.isKit && <Btn size="sm" variant="warning" onClick={() => { setAdjustModal(r); setAdjustQty(''); setAdjustReason(''); }}>📦</Btn>}
       </div>
     )}
@@ -129,10 +141,25 @@ export default function Products() {
     <div>
       <PageHeader title="المنتجات" icon="🏷️" actions={[
         can('products') && <Btn key="imp" variant="ghost" onClick={() => window.location.assign('/settings?tab=data')}>استيراد من Excel</Btn>,
-        <Btn key="lbl" variant="ghost" onClick={() => setLabels({})}>{`طباعة الباركود${labelQueue ? ` (${labelQueue} في القائمة)` : ''}`}</Btn>,
+        <Btn key="lbl" variant="ghost" onClick={() => { setListId(null); setLabels({}); }}>طباعة الباركود</Btn>,
         can('products') && <Btn key="gen" variant="ghost" onClick={generateAll}>توليد الباركود</Btn>,
         can('products') && <Btn key="add" onClick={openNew}>+ إضافة منتج</Btn>
       ]} />
+
+      {lists.length > 0 && (
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 14 }}>
+          <span style={{ fontSize: 12, color: 'var(--muted)', marginLeft: 4 }}>قوائم الباركود المحفوظة:</span>
+          {lists.map(l => (
+            <div key={l.id} onClick={() => { setListId(l.id); setLabels({}); }} title="فتح القائمة للطباعة"
+              style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 8px 7px 12px', borderRadius: 10, cursor: 'pointer', background: 'var(--card)', border: '1px solid var(--border)', fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>
+              <IconPrinter size={16} stroke={1.8} color="#818cf8" />
+              <span>{l.name}</span>
+              <span style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 400 }}>{Object.keys(cleanCopies(l.copies)).length} صنف</span>
+              <button onClick={e => { e.stopPropagation(); removeList(l); }} title="حذف القائمة" style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', display: 'flex', padding: 2 }}><IconX size={15} /></button>
+            </div>
+          ))}
+        </div>
+      )}
 
       <Card style={{ marginBottom: 16 }}>
         <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -249,7 +276,8 @@ export default function Products() {
         onScan={code => { if (cam === 'form') setForm(f => ({ ...f, barcode: code })); else setSearch(code); }} />
       <KitModal open={!!kitSku} onClose={() => setKitSku(null)} sku={kitSku} products={products} onSaved={reloadMaps}
         map={kitSku && (maps.find(m => m.sku === kitSku) || { product: editing, qty: 1, components: [] })} />
-      <LabelModal open={!!labels} onClose={() => setLabels(null)} products={products} maps={maps} initial={labels || {}} />
+      <LabelModal open={!!labels} onClose={() => { setLabels(null); setListId(null); }} products={products} maps={maps} initial={labels || {}}
+        list={lists.find(l => l.id === listId) || null} onSaveList={putList} />
 
       {/* Adjust Stock Modal */}
       <Modal open={!!adjustModal} onClose={() => setAdjustModal(null)} title={`تسوية مخزون: ${adjustModal?.name}`} width={400}>
